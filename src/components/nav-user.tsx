@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useLogoutMutation } from "@/store/api/authApi"
 
 export function NavUser({
   user,
@@ -40,6 +41,8 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const [logout] = useLogoutMutation()
+
 
   return (
     <SidebarMenu>
@@ -102,7 +105,12 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => {
+              logout({}).then(() => {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+              });
+            }}>
               <LogOut />
               Log out
             </DropdownMenuItem>

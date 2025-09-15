@@ -1,5 +1,4 @@
 import { Wallet2 } from "lucide-react"
-
 import { LoginForm } from "@/components/login-form"
 
 export default function LoginPage() {

@@ -14,11 +14,11 @@ import {
     SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { useMemo } from "react"
-import { Outlet, useLocation } from "react-router-dom"
-// ...existing code...
+import { Outlet, useLocation, Link } from "react-router-dom"
 
 export default function Page() {
     const location = useLocation()
+
 
     const crumbs = useMemo(() => {
         const segments = location.pathname.split("/").filter(Boolean)
@@ -29,6 +29,9 @@ export default function Page() {
             "login": "Login",
             "dashboard": "Dashboard",
             "profile": "Profile",
+            "contact": "Contact",
+            "groups": "Groups",
+            "settings": "Settings",
             // add more known mappings here as you add routes
         }
 
@@ -48,29 +51,29 @@ export default function Page() {
             <AppSidebar />
             <SidebarInset>
                 <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-                    <div className="flex items-center gap-2 px-4">
+                    <div className="flex items-center gap-2 px-4 w-full min-w-0">
                         <SidebarTrigger className="-ml-1" />
                         <Separator
                             orientation="vertical"
                             className="mr-2 data-[orientation=vertical]:h-4"
                         />
-                        <Breadcrumb>
-                            <BreadcrumbList>
+                        <Breadcrumb aria-label="Breadcrumb" className="w-full overflow-x-auto whitespace-nowrap">
+                            <BreadcrumbList className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                                 {crumbs.map((c, idx) => {
                                     const isLast = idx === crumbs.length - 1
                                     return (
                                         <BreadcrumbItem
                                             key={c.path}
-                                            className={idx === 0 ? "hidden md:block" : undefined}
+                                            className={`${idx === 0 ? "hidden md:block " : ""}flex-shrink-0 whitespace-nowrap`}
                                         >
                                             {isLast ? (
                                                 <BreadcrumbPage>{c.name}</BreadcrumbPage>
                                             ) : (
                                                 <>
-                                                    <BreadcrumbLink href={c.path}>
-                                                        {c.name}
+                                                    <BreadcrumbLink asChild>
+                                                        <Link to={c.path} className="inline-flex items-center h-5">{c.name}</Link>
                                                     </BreadcrumbLink>
-                                                    <BreadcrumbSeparator className="hidden md:block" />
+                                                    <BreadcrumbSeparator className="hidden md:inline-flex flex-shrink-0 items-center justify-center mx-1 text-muted-foreground" />
                                                 </>
                                             )}
                                         </BreadcrumbItem>
