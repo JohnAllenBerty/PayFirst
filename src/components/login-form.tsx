@@ -3,18 +3,23 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useLoginMutation } from '@/store/api/authApi'
-import { useNavigate } from 'react-router-dom'
+import type { ApiSuccess, AuthToken } from '@/store/api/payFirstApi'
+import { useApiLoginMutation } from '@/store/api/payFirstApi'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<'form'>) {
-  const [login, { isLoading, isError }] = useLoginMutation()
+  const [login, { isLoading, isError }] = useApiLoginMutation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [remember, setRemember] = useState(true)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/'
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -37,13 +42,19 @@ export function LoginForm({
     if (Object.keys(nextErrors).length) return
 
     if (!errors.email && !errors.password) {
-      // Call the login mutation here
-      login({ username: email, password: password }).then((res) => {
-        if (res.data.data) {
-          localStorage.setItem('token', (res.data).data.token)
-          window.location.href = '/'
-        }
-      })
+      login({ username: email, password, remember })
+        .unwrap()
+        .then((res) => {
+          // Only navigate after a successful response with a token
+          const ok = (res as ApiSuccess<AuthToken>)?.status === true
+          const token = ok ? (res as ApiSuccess<AuthToken>).data?.token : undefined
+          if (ok && token) {
+            navigate(from, { replace: true })
+          }
+        })
+        .catch(() => {
+          // error handled by isError and message below
+        })
     }
   }
 
@@ -86,13 +97,21 @@ export function LoginForm({
           </div>
           <Input
             id="password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-invalid={!!errors.password}
             aria-describedby={errors.password ? 'password-error' : undefined}
           />
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} /> Show password
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember me
+            </label>
+          </div>
           {errors.password && (
             <span id="password-error" className="text-sm text-red-600">
               {errors.password}
@@ -104,13 +123,13 @@ export function LoginForm({
             </span>
           )}
         </div>
-        <Button type="submit" disabled={isLoading}>Login</Button>
+  <Button type="submit" disabled={isLoading}>{isLoading ? 'Logging in…' : 'Login'}</Button>
       </div>
       <div className="text-center text-sm">
         Don&apos;t have an account?{' '}
-        <a href="/sign-up" className="underline underline-offset-4">
+        <Link to="/sign-up" className="underline underline-offset-4">
           Sign up
-        </a>
+        </Link>
       </div>
     </form>
   )

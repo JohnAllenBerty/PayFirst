@@ -13,12 +13,11 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { useMemo } from "react"
+import { useMemo, Fragment } from "react"
 import { Outlet, useLocation, Link } from "react-router-dom"
 
 export default function Page() {
     const location = useLocation()
-
 
     const crumbs = useMemo(() => {
         const segments = location.pathname.split("/").filter(Boolean)
@@ -62,21 +61,22 @@ export default function Page() {
                                 {crumbs.map((c, idx) => {
                                     const isLast = idx === crumbs.length - 1
                                     return (
-                                        <BreadcrumbItem
-                                            key={c.path}
-                                            className={`${idx === 0 ? "hidden md:block " : ""}flex-shrink-0 whitespace-nowrap`}
-                                        >
-                                            {isLast ? (
-                                                <BreadcrumbPage>{c.name}</BreadcrumbPage>
-                                            ) : (
-                                                <>
+                                        <Fragment key={c.path}>
+                                            <BreadcrumbItem
+                                                className={`${idx === 0 ? "hidden md:block " : ""}flex-shrink-0 whitespace-nowrap`}
+                                            >
+                                                {isLast ? (
+                                                    <BreadcrumbPage>{c.name}</BreadcrumbPage>
+                                                ) : (
                                                     <BreadcrumbLink asChild>
                                                         <Link to={c.path} className="inline-flex items-center h-5">{c.name}</Link>
                                                     </BreadcrumbLink>
-                                                    <BreadcrumbSeparator className="hidden md:inline-flex flex-shrink-0 items-center justify-center mx-1 text-muted-foreground" />
-                                                </>
+                                                )}
+                                            </BreadcrumbItem>
+                                            {!isLast && (
+                                                <BreadcrumbSeparator className="hidden md:inline-flex flex-shrink-0 items-center justify-center mx-1 text-muted-foreground" />
                                             )}
-                                        </BreadcrumbItem>
+                                        </Fragment>
                                     )
                                 })}
                             </BreadcrumbList>

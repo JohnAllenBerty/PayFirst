@@ -1,3 +1,4 @@
+/* eslint react-refresh/only-export-components: 0 */
 "use client"
 
 import * as React from "react"

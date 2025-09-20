@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useSignUpMutation } from '@/store/api/authApi'
-import { useNavigate } from 'react-router-dom'
+import type { ApiSuccess } from '@/store/api/payFirstApi'
+import { useApiSignUpMutation } from '@/store/api/payFirstApi'
+import { Link, useNavigate } from 'react-router-dom'
 
 // ...existing code...
 export function SignUpForm({
@@ -13,11 +14,13 @@ export function SignUpForm({
 }: React.ComponentProps<"form">) {
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirm, setShowConfirm] = useState(false)
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
     const [email, setEmail] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
-    const [signup, { isLoading }] = useSignUpMutation()
+    const [signup, { isLoading }] = useApiSignUpMutation()
     const navigate = useNavigate()
 
     // validation helpers
@@ -73,23 +76,25 @@ export function SignUpForm({
             }
 
             // RTK Query mutation returns a promise; unwrap() will throw on error
-            // if your authApi doesn't expose unwrap, you can handle the returned result differently
-            const res = await signup(payload).unwrap?.() ?? await signup(payload)
-            if (res.data) {
-                // on success, navigate to login (or dashboard if backend signs user in)
-                navigate('/login')
+            const res = await signup(payload).unwrap()
+            const ok = (res as ApiSuccess<Record<string, unknown>>)?.status === true
+            if (ok) {
+                navigate('/login?justSignedUp=1', { replace: true })
+                return
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             // normalize server errors into field errors when possible
-            const data = err?.data ?? err?.error ?? err
+            const e = err as { data?: unknown; error?: unknown; status?: number; detail?: unknown } | undefined
+            const data = (e?.data ?? e?.error ?? e) as { detail?: unknown } | undefined
             // backend might return { detail: 'Username already exists' } or status 409
             if (data?.detail && /exists|already/i.test(String(data.detail))) {
                 setErrors(prev => ({ ...prev, user_name: 'Email already in use' }))
-            } else if (err?.status === 409) {
+            } else if (e?.status === 409) {
                 setErrors(prev => ({ ...prev, user_name: 'Email already in use' }))
             } else {
                 // generic fallback
-                setErrors(prev => ({ ...prev, general: (data?.detail || 'Sign up failed').toString() }))
+                const msg = data?.detail ? String(data.detail) : 'Sign up failed'
+                setErrors(prev => ({ ...prev, general: msg }))
             }
         }
     }
@@ -155,7 +160,7 @@ export function SignUpForm({
                     <Input
                         id="password"
                         name="password"
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         required
                         minLength={8}
                         value={password}
@@ -163,6 +168,9 @@ export function SignUpForm({
                         aria-invalid={!!errors.password}
                         aria-describedby={errors.password ? 'password-error' : undefined}
                     />
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} /> Show password
+                    </label>
                     {errors.password && <span id="password-error" className="text-sm text-red-600 mt-1">{errors.password}</span>}
                     <p className="text-xs text-muted-foreground mt-1">
                         Minimum 8 characters, upper & lower case, a number, a special character, no spaces.
@@ -174,13 +182,16 @@ export function SignUpForm({
                     <Input
                         id="confirmPassword"
                         name="confirmPassword"
-                        type="password"
+                        type={showConfirm ? 'text' : 'password'}
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         aria-invalid={!!errors.confirmPassword}
                         aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
                     />
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={showConfirm} onChange={(e) => setShowConfirm(e.target.checked)} /> Show password
+                    </label>
                     {errors.confirmPassword && <span id="confirm-password-error" className="text-sm text-red-600 mt-1">{errors.confirmPassword}</span>}
                 </div>
 
@@ -193,9 +204,9 @@ export function SignUpForm({
 
             <div className="text-center text-sm">
                 Already have an account?{" "}
-                <a href="/login" className="underline underline-offset-4">
+                <Link to="/login" className="underline underline-offset-4">
                     Login
-                </a>
+                </Link>
             </div>
         </form>
     )
