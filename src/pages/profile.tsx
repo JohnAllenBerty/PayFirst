@@ -23,7 +23,7 @@ const ProfilePage = () => {
     const displayName = useMemo(() => {
         if (!profile) return 'Profile'
         const full = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim()
-        return full || profile.username
+        return full || profile.user
     }, [profile])
 
     return (
@@ -57,10 +57,11 @@ const ProfilePage = () => {
                 </Card>
             ) : profile ? (
                 <ProfileEditor
-                    id={profile.id}
-                    username={profile.username}
+                    user={profile.user}
                     first_name={profile.first_name}
                     last_name={profile.last_name}
+                    date_joined={profile.date_joined}
+                    last_login={profile.last_login}
                     displayName={displayName}
                     onSave={async (changes) => {
                         try {
@@ -82,17 +83,18 @@ const ProfilePage = () => {
 
 export default ProfilePage
 
-function ProfileEditor({ id, username, first_name, last_name, displayName, onSave, saving }: {
-    id: number
-    username: string
+function ProfileEditor({ user, first_name, last_name, date_joined, last_login, displayName, onSave, saving }: {
+    user: string
     first_name: string
     last_name: string
+    date_joined: string
+    last_login: string
     displayName: string
     saving: boolean
-    onSave: (changes: Partial<{ username: string; first_name: string; last_name: string }>) => Promise<void>
+    onSave: (changes: Partial<{ user: string; first_name: string; last_name: string }>) => Promise<void>
 }) {
     const [editing, setEditing] = useState(false)
-    const [u, setU] = useState(username)
+    const [u, setU] = useState(user)
     const [f, setF] = useState(first_name)
     const [l, setL] = useState(last_name)
     const [err, setErr] = useState<string | null>(null)
@@ -100,10 +102,10 @@ function ProfileEditor({ id, username, first_name, last_name, displayName, onSav
     const initials = useMemo(() => {
         const parts = [f || first_name, l || last_name].filter(Boolean)
         const s = parts.map(p => (p || '').trim()[0]).filter(Boolean).join('').slice(0, 2)
-        return s || (u || username || 'U')[0]?.toUpperCase() || 'U'
-    }, [f, l, u, first_name, last_name, username])
+        return s || (u || 'U')[0]?.toUpperCase() || 'U'
+    }, [f, l, u, first_name, last_name])
 
-    const isDirty = u !== username || f !== first_name || l !== last_name
+    const isDirty = u !== user || f !== first_name || l !== last_name
     const canSave = isDirty && !!u.trim()
 
     return (
@@ -118,10 +120,14 @@ function ProfileEditor({ id, username, first_name, last_name, displayName, onSav
                 <CardDescription>Update your account information.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-                <div className="text-xs text-muted-foreground">User ID: {id}</div>
+                <div className="text-xs text-muted-foreground grid gap-1">
+                    <div><span className="text-muted-foreground">User:</span> {user}</div>
+                    <div><span className="text-muted-foreground">Joined:</span> {new Date(date_joined).toLocaleString()}</div>
+                    <div><span className="text-muted-foreground">Last login:</span> {new Date(last_login).toLocaleString()}</div>
+                </div>
                 {!editing ? (
                     <div className="grid gap-2 text-sm">
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Username</span><span>{u}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">User</span><span>{u}</span></div>
                         <div className="flex items-center justify-between"><span className="text-muted-foreground">First name</span><span>{f || '—'}</span></div>
                         <div className="flex items-center justify-between"><span className="text-muted-foreground">Last name</span><span>{l || '—'}</span></div>
                     </div>
@@ -129,9 +135,9 @@ function ProfileEditor({ id, username, first_name, last_name, displayName, onSav
                     <form className="grid gap-3" onSubmit={async (e) => {
                         e.preventDefault()
                         setErr(null)
-                        if (!u.trim()) { setErr('Username is required'); return }
+                        if (!u.trim()) { setErr('User is required'); return }
                         try {
-                            await onSave({ username: u.trim(), first_name: f.trim(), last_name: l.trim() })
+                            await onSave({ user: u.trim(), first_name: f.trim(), last_name: l.trim() })
                             setEditing(false)
                         } catch (e) {
                             // toast is already handled in onSave; keep inline message too
@@ -139,7 +145,7 @@ function ProfileEditor({ id, username, first_name, last_name, displayName, onSav
                         }
                     }}>
                         <div className="grid gap-2">
-                            <Label htmlFor="u">Username</Label>
+                            <Label htmlFor="u">User</Label>
                             <Input id="u" value={u} onChange={(e) => setU(e.target.value)} />
                         </div>
                         <div className="grid gap-2">
@@ -152,7 +158,7 @@ function ProfileEditor({ id, username, first_name, last_name, displayName, onSav
                         </div>
                         {err && <div className="text-sm text-red-600">{err}</div>}
                         <div className="flex items-center gap-2 justify-end">
-                            <Button type="button" variant="outline" onClick={() => { setU(username); setF(first_name); setL(last_name); setErr(null); setEditing(false) }}>Cancel</Button>
+                            <Button type="button" variant="outline" onClick={() => { setU(user); setF(first_name); setL(last_name); setErr(null); setEditing(false) }}>Cancel</Button>
                             <Button type="submit" disabled={saving || !canSave}>{saving ? 'Saving…' : 'Save'}</Button>
                         </div>
                     </form>

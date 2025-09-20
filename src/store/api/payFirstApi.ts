@@ -6,7 +6,13 @@ import { toast } from "react-toastify";
 export type ApiSuccess<T> = { status: true; message: string; data: T };
 export type ApiFail = { status: false; message: string; error: unknown };
 export type AuthToken = { token: string };
-export type Profile = { id: number; username: string; first_name: string; last_name: string };
+export type Profile = {
+    user: string;
+    first_name: string;
+    last_name: string;
+    date_joined: string;
+    last_login: string;
+};
 export type ContactGroup = {
     id: number;
     name: string;
@@ -162,19 +168,42 @@ export const payFirstApi = createApi({
         }),
         profile: builder.query<ApiSuccess<Profile> | ApiFail, void>({
             query: () => ({ url: "/profile" }),
+            transformResponse: (res: ApiSuccess<Record<string, unknown>> | ApiFail): ApiSuccess<Profile> | ApiFail => {
+                if ('status' in res && res.status === true) {
+                    const d = res.data as Record<string, unknown>
+                    const mapped: Profile = {
+                        user: String(d.username ?? ''),
+                        first_name: String(d.first_name ?? ''),
+                        last_name: String(d.last_name ?? ''),
+                        date_joined: String(d.date_joined ?? ''),
+                        last_login: String(d.last_login ?? ''),
+                    }
+                    return { status: true, message: res.message, data: mapped }
+                }
+                return res
+            },
             providesTags: ["User"],
         }),
         updateProfile: builder.mutation<
             ApiSuccess<Profile> | ApiFail,
-            Partial<Pick<Profile, 'first_name' | 'last_name' | 'username'>>
+            Partial<Pick<Profile, 'first_name' | 'last_name' | 'user'>>
         >({
-            query: (body) => ({ url: "/profile", method: "PATCH", body }),
+            query: (body) => {
+                const { user, first_name, last_name, ...rest } = body
+                // Backend expects 'username'; map from our 'user' if provided
+                const payload: Record<string, unknown> = { ...rest }
+                if (typeof user === 'string') payload.username = user
+                if (typeof first_name === 'string') payload.first_name = first_name
+                if (typeof last_name === 'string') payload.last_name = last_name
+                return { url: `/profile`, method: "PATCH", body: payload }
+            },
             invalidatesTags: ["User"],
             async onQueryStarted(changes, { dispatch, queryFulfilled }) {
                 const patch = dispatch(
                     payFirstApi.util.updateQueryData('profile', undefined, (draft) => {
                         if (draft && typeof draft !== 'string' && draft.status) {
-                            draft.data = { ...draft.data, ...changes } as Profile;
+                            const apply: Partial<Profile> = { ...changes }
+                            draft.data = { ...draft.data, ...apply } as Profile
                         }
                     })
                 );
@@ -183,8 +212,10 @@ export const payFirstApi = createApi({
         }),
 
         // Contact Groups
-        listContactGroups: builder.query<ApiSuccess<ContactGroup[]> | ApiFail, void>({
-            query: () => ({ url: "/user/contact-groups/" }),
+        listContactGroups: builder.query<ApiSuccess<ContactGroup[]> | ApiFail, ListParams | void>({
+            query: (params) => params
+                ? ({ url: "/user/contact-groups/", params: params as Record<string, string | number | boolean | undefined> })
+                : ({ url: "/user/contact-groups/" }),
             providesTags: ["ContactGroups"],
         }),
         createContactGroup: builder.mutation<ApiSuccess<ContactGroup> | ApiFail, { name: string; parent_group?: number | null }>({

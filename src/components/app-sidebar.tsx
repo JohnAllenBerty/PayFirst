@@ -91,9 +91,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (res.status) {
         const p = res.data
         const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
-        const name = fullName || p.username || 'User'
-        // Our Profile type doesn't include email; show username in the subline if available
-        const email = p.username || ''
+        const name = fullName || p.user || 'User'
+        // Our Profile type doesn't include email; show user in the subline if available
+        const email = p.user || ''
         return { name, email, avatar: "" }
       }
     }

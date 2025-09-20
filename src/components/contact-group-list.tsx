@@ -76,130 +76,109 @@ function GroupNode({
 }
 
 const ContactGroupList = () => {
-    const { data: groupsRes, isLoading } = useListContactGroupsQuery()
+    const [sortAsc, setSortAsc] = useState(true)
+    const [query, setQuery] = useState('')
+    const [debouncedQuery, setDebouncedQuery] = useState('')
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
+        return () => clearTimeout(t)
+    }, [query])
+    const { data: groupsRes, isLoading, isFetching, refetch } = useListContactGroupsQuery({ ordering: sortAsc ? 'name' : '-name', search: debouncedQuery || undefined })
     const [createGroup, { isLoading: creating }] = useCreateContactGroupMutation()
     const [updateGroup, { isLoading: updating }] = useUpdateContactGroupMutation()
     const [deleteGroup, { isLoading: deleting }] = useDeleteContactGroupMutation()
     const [name, setName] = useState('')
     const [parent, setParent] = useState<number | ''>('')
-        const [error, setError] = useState<string | null>(null)
-        const [createOpen, setCreateOpen] = useState(false)
-    const [sortAsc, setSortAsc] = useState(true)
-        const [page, setPage] = useState(1)
-        const pageSize = 10
+    const [error, setError] = useState<string | null>(null)
+    const [createOpen, setCreateOpen] = useState(false)
+    // sortAsc moved above and drives API ordering
+    const [page, setPage] = useState(1)
+    const pageSize = 10
     const [treeView, setTreeView] = useState(true)
-        const [query, setQuery] = useState('')
-        const [debouncedQuery, setDebouncedQuery] = useState('')
+    const [viewingId, setViewingId] = useState<number | null>(null)
+    const [editingId, setEditingId] = useState<number | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editParent, setEditParent] = useState<number | ''>('')
+    const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-        useEffect(() => {
-            const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
-            return () => clearTimeout(t)
-        }, [query])
-        const [viewingId, setViewingId] = useState<number | null>(null)
-        const [editingId, setEditingId] = useState<number | null>(null)
-        const [editName, setEditName] = useState('')
-        const [editParent, setEditParent] = useState<number | ''>('')
-        const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+    const failMessage = groupsRes && !groupsRes.status ? String(groupsRes.error ?? 'Server error') : null
+    const groups: ContactGroup[] = useMemo(() => {
+        if (groupsRes && typeof groupsRes !== 'string') {
+            const res = groupsRes as ApiSuccess<ContactGroup[]> | ApiFail
+            if (res.status) return res.data
+        }
+        return []
+    }, [groupsRes])
 
-            const failMessage = groupsRes && !groupsRes.status ? String(groupsRes.error ?? 'Server error') : null
-            const groups: ContactGroup[] = useMemo(() => {
-                if (groupsRes && typeof groupsRes !== 'string') {
-                    const res = groupsRes as ApiSuccess<ContactGroup[]> | ApiFail
-                    if (res.status) return res.data
-                }
-                return []
-            }, [groupsRes])
+    const hasNested = useMemo(() => groups.some(g => Array.isArray(g.subgroups) && g.subgroups!.length > 0), [groups])
 
-            const hasNested = useMemo(() => groups.some(g => Array.isArray(g.subgroups) && g.subgroups!.length > 0), [groups])
-
-            const flattenNested = (nodes: ContactGroup[]): ContactGroup[] => {
-                const result: ContactGroup[] = []
-                const walk = (n: ContactGroup, parent: number | null) => {
-                    result.push({ id: n.id, name: n.name, owner: n.owner, parent_group: parent })
-                    if (Array.isArray(n.subgroups)) {
-                        n.subgroups.forEach((child) => walk(child, n.id))
-                    }
-                }
-                nodes.forEach(n => walk(n, n.parent_group ?? null))
-                return result
+    const flattenNested = (nodes: ContactGroup[]): ContactGroup[] => {
+        const result: ContactGroup[] = []
+        const walk = (n: ContactGroup, parent: number | null) => {
+            result.push({ id: n.id, name: n.name, owner: n.owner, parent_group: parent })
+            if (Array.isArray(n.subgroups)) {
+                n.subgroups.forEach((child) => walk(child, n.id))
             }
+        }
+        nodes.forEach(n => walk(n, n.parent_group ?? null))
+        return result
+    }
 
-            const allGroups: ContactGroup[] = useMemo(() => {
-                if (hasNested) {
-                    // Backend provided tree. Flatten it for selects and flat view
-                    return flattenNested(groups)
-                }
-                return groups
-            }, [groups, hasNested])
+    const allGroups: ContactGroup[] = useMemo(() => {
+        if (hasNested) {
+            // Backend provided tree. Flatten it for selects and flat view
+            return flattenNested(groups)
+        }
+        return groups
+    }, [groups, hasNested])
 
-            const idToName = useMemo(() => {
-                const m = new Map<number, string>()
-                allGroups.forEach(g => m.set(g.id, g.name))
-                return m
-            }, [allGroups])
+    const idToName = useMemo(() => {
+        const m = new Map<number, string>()
+        allGroups.forEach(g => m.set(g.id, g.name))
+        return m
+    }, [allGroups])
 
-            const groupTree = useMemo(() => {
-                // If backend provided nested, normalize to GroupTreeNode directly
-                if (hasNested) {
-                    const toNode = (n: ContactGroup): GroupTreeNode => ({
-                        id: n.id,
-                        name: n.name,
-                        parent_group: n.parent_group ?? null,
-                        children: Array.isArray(n.subgroups) ? n.subgroups.map(toNode) : []
-                    })
-                    const roots = groups.map(toNode)
-                    const sorter = (a: GroupTreeNode, b: GroupTreeNode) => sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
-                    const sortRec = (nodes: GroupTreeNode[]) => { nodes.sort(sorter); nodes.forEach(n => sortRec(n.children)) }
-                    sortRec(roots)
-                    return roots
-                }
-                // Fallback: build from flat list using parent_group
-                const byId = new Map<number, GroupTreeNode>()
-                const roots: GroupTreeNode[] = []
-                for (const g of groups) byId.set(g.id, { id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: [] })
-                for (const g of groups) {
-                    const node = byId.get(g.id)!
-                    if (g.parent_group && byId.has(g.parent_group)) {
-                        byId.get(g.parent_group)!.children.push(node)
-                    } else {
-                        roots.push(node)
-                    }
-                }
-                const sorter = (a: GroupTreeNode, b: GroupTreeNode) => sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
-                const sortRec = (nodes: GroupTreeNode[]) => { nodes.sort(sorter); nodes.forEach(n => sortRec(n.children)) }
-                sortRec(roots)
-                return roots
-            }, [groups, sortAsc, hasNested])
-
-            // Filter helpers
-            const filterFlat = useMemo(() => {
-                if (!debouncedQuery) return allGroups
-                return allGroups.filter(g => g.name.toLowerCase().includes(debouncedQuery))
-            }, [allGroups, debouncedQuery])
-
-            const filterTree = (nodes: GroupTreeNode[]): GroupTreeNode[] => {
-                if (!debouncedQuery) return nodes
-                const match = (name: string) => name.toLowerCase().includes(debouncedQuery)
-                const walk = (n: GroupTreeNode): GroupTreeNode | null => {
-                    const kids = n.children.map(walk).filter((c): c is GroupTreeNode => c !== null)
-                    if (match(n.name) || kids.length) {
-                        return { ...n, children: kids }
-                    }
-                    return null
-                }
-                return nodes.map(walk).filter((c): c is GroupTreeNode => c !== null)
+    const groupTree = useMemo(() => {
+        // If backend provided nested, normalize to GroupTreeNode directly
+        if (hasNested) {
+            const toNode = (n: ContactGroup): GroupTreeNode => ({
+                id: n.id,
+                name: n.name,
+                parent_group: n.parent_group ?? null,
+                children: Array.isArray(n.subgroups) ? n.subgroups.map(toNode) : []
+            })
+            const roots = groups.map(toNode)
+            // Assume server returns ordered; keep original order for visual
+            return roots
+        }
+        // Fallback: build from flat list using parent_group
+        const byId = new Map<number, GroupTreeNode>()
+        const roots: GroupTreeNode[] = []
+        for (const g of groups) byId.set(g.id, { id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: [] })
+        for (const g of groups) {
+            const node = byId.get(g.id)!
+            if (g.parent_group && byId.has(g.parent_group)) {
+                byId.get(g.parent_group)!.children.push(node)
+            } else {
+                roots.push(node)
             }
+        }
+        // Keep server order
+        return roots
+    }, [groups, hasNested])
+
+    // Server-side search is used; no client-side filtering
 
     const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
         e.preventDefault()
         setError(null)
         if (!name.trim()) { setError('Name is required'); return false }
-            try {
-                const res = await createGroup({ name: name.trim(), parent_group: parent === '' ? null : parent }).unwrap()
-                setName('')
-                setParent('')
-                toast.success(extractSuccessMessage(res, 'Group created'))
-                return true
+        try {
+            const res = await createGroup({ name: name.trim(), parent_group: parent === '' ? null : parent }).unwrap()
+            setName('')
+            setParent('')
+            toast.success(extractSuccessMessage(res, 'Group created'))
+            return true
         } catch (e) {
             setError(extractErrorMessage(e))
             return false
@@ -213,18 +192,18 @@ const ContactGroupList = () => {
                 <p className="text-sm text-muted-foreground">Organize your contacts into groups and subgroups.</p>
             </div>
 
-                    {failMessage && (
-                        <div className="max-w-xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                            {failMessage}
-                        </div>
-                    )}
+            {failMessage && (
+                <div className="max-w-xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {failMessage}
+                </div>
+            )}
 
             <div className="flex items-center justify-between">
                 <div />
                 <Button size="sm" onClick={() => { setCreateOpen(true); setError(null) }}>New Group</Button>
             </div>
 
-                    <div className="space-y-2">
+            <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All groups</h2>
                     <div className="flex items-center gap-2 text-sm">
@@ -232,10 +211,36 @@ const ContactGroupList = () => {
                             <Input
                                 value={query}
                                 onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setPage(1)
+                                        refetch()
+                                    }
+                                }}
                                 placeholder="Search groups…"
-                                className="pl-8 h-9 w-56"
+                                className="pl-8 pr-20 h-9 w-56"
                             />
                             <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-1">
+                                <span className="h-5 w-px bg-border mr-1" aria-hidden="true" />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    aria-label="Search"
+                                    title="Search"
+                                    className="h-9 px-2"
+                                    disabled={isFetching}
+                                    onClick={() => {
+                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setPage(1)
+                                        refetch()
+                                    }}
+                                >
+                                    Search
+                                </Button>
+                            </div>
                         </div>
                         <Button variant="outline" size="sm" onClick={() => setSortAsc(s => !s)} className="gap-1">
                             {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />} Sort
@@ -265,53 +270,51 @@ const ContactGroupList = () => {
                         ))}
                     </div>
                 ) : allGroups.length ? (
-                            treeView ? (
-                                <ul className="rounded-md border p-2">
-                                    {filterTree(groupTree).map(node => (
-                                        <GroupNode
-                                            key={node.id}
-                                            node={node}
-                                            depth={0}
-                                            idToName={idToName}
-                                            onView={(id) => setViewingId(id)}
-                                            onEdit={(id, name, parent) => { setEditingId(id); setEditName(name); setEditParent(parent ?? ''); }}
-                                            onDelete={(id) => setConfirmDeleteId(id)}
-                                        />
-                                    ))}
-                                </ul>
-                            ) : (
-                                <ul className="divide-y rounded-md border">
-                                    {filterFlat
-                                        .slice()
-                                        .sort((a, b) => sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name))
-                                        .slice((page - 1) * pageSize, page * pageSize)
-                                        .map(g => (
-                                            <li key={g.id} className="p-3 text-sm flex items-center justify-between">
-                                                <div>
-                                                    <div className="font-medium">{g.name}</div>
-                                                    {g.parent_group && (
-                                                        <div className="text-muted-foreground">Parent: {idToName.get(g.parent_group) || g.parent_group}</div>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => setViewingId(g.id)}>View</Button>
-                                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(g.id); setEditName(g.name); setEditParent(g.parent_group ?? ''); }}>Edit</Button>
-                                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(g.id)} disabled={deleting}>Delete</Button>
-                                                </div>
-                                            </li>
-                                        ))}
-                                </ul>
-                            )
+                    treeView ? (
+                        <ul className="rounded-md border p-2">
+                            {groupTree.map(node => (
+                                <GroupNode
+                                    key={node.id}
+                                    node={node}
+                                    depth={0}
+                                    idToName={idToName}
+                                    onView={(id) => setViewingId(id)}
+                                    onEdit={(id, name, parent) => { setEditingId(id); setEditName(name); setEditParent(parent ?? ''); }}
+                                    onDelete={(id) => setConfirmDeleteId(id)}
+                                />
+                            ))}
+                        </ul>
+                    ) : (
+                        <ul className="divide-y rounded-md border">
+                            {allGroups
+                                .slice((page - 1) * pageSize, page * pageSize)
+                                .map(g => (
+                                    <li key={g.id} className="p-3 text-sm flex items-center justify-between">
+                                        <div>
+                                            <div className="font-medium">{g.name}</div>
+                                            {g.parent_group && (
+                                                <div className="text-muted-foreground">Parent: {idToName.get(g.parent_group) || g.parent_group}</div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button size="sm" variant="outline" onClick={() => setViewingId(g.id)}>View</Button>
+                                            <Button size="sm" variant="outline" onClick={() => { setEditingId(g.id); setEditName(g.name); setEditParent(g.parent_group ?? ''); }}>Edit</Button>
+                                            <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(g.id)} disabled={deleting}>Delete</Button>
+                                        </div>
+                                    </li>
+                                ))}
+                        </ul>
+                    )
                 ) : (
                     <div className="text-sm text-muted-foreground">No groups found</div>
                 )}
-                        {!treeView && filterFlat.length > pageSize && (
-                            <div className="flex items-center justify-end gap-2 pt-2">
-                                <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
-                                <span className="text-xs">Page {page} of {Math.ceil(filterFlat.length / pageSize)}</span>
-                                <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(Math.ceil(filterFlat.length / pageSize), p + 1))} disabled={page >= Math.ceil(filterFlat.length / pageSize)}>Next</Button>
-                            </div>
-                        )}
+                {!treeView && allGroups.length > pageSize && (
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                        <span className="text-xs">Page {page} of {Math.ceil(allGroups.length / pageSize)}</span>
+                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(Math.ceil(allGroups.length / pageSize), p + 1))} disabled={page >= Math.ceil(allGroups.length / pageSize)}>Next</Button>
+                    </div>
+                )}
             </div>
             {/* Create modal */}
             {createOpen && (
@@ -382,15 +385,15 @@ const ContactGroupList = () => {
                         <form
                             className="grid gap-3"
                             onSubmit={async (e) => {
-                              e.preventDefault()
-                              try {
-                                const id = editingId!
-                                                                const res = await updateGroup({ id, changes: { name: editName.trim(), parent_group: editParent === '' ? null : editParent } }).unwrap()
-                                toast.success(extractSuccessMessage(res, 'Group updated'))
-                                setEditingId(null)
-                              } catch (e) {
-                                toast.error(extractErrorMessage(e))
-                              }
+                                e.preventDefault()
+                                try {
+                                    const id = editingId!
+                                    const res = await updateGroup({ id, changes: { name: editName.trim(), parent_group: editParent === '' ? null : editParent } }).unwrap()
+                                    toast.success(extractSuccessMessage(res, 'Group updated'))
+                                    setEditingId(null)
+                                } catch (e) {
+                                    toast.error(extractErrorMessage(e))
+                                }
                             }}
                         >
                             <div className="grid gap-2">
