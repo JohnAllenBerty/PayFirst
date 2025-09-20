@@ -33,24 +33,34 @@ const RepaymentsPage = () => {
   }, [query])
 
   const repData = useMemo(() => {
-    const res = repRes as ApiFail | Paginated<Repayment> | ApiSuccess<Paginated<Repayment>> | undefined
+    const res = repRes as ApiFail | Paginated<Repayment> | ApiSuccess<Paginated<Repayment> | Repayment[]> | undefined
     if (!res) return { items: [] as Repayment[], total: 0 }
-    if ((res as ApiSuccess<Paginated<Repayment>>).status === true) {
-      const ok = res as ApiSuccess<Paginated<Repayment>>
-      return { items: ok.data.results, total: ok.data.count }
+    if ((res as ApiSuccess<Paginated<Repayment> | Repayment[]>).status === true) {
+      const ok = res as ApiSuccess<Paginated<Repayment> | Repayment[]>
+      const d = ok.data as unknown
+      if (Array.isArray(d)) return { items: d, total: d.length }
+      const pg = d as Paginated<Repayment>
+      if (Array.isArray(pg.results)) return { items: pg.results, total: pg.count ?? pg.results.length }
+      return { items: [] as Repayment[], total: 0 }
     }
     if ((res as ApiFail).status === false) return { items: [] as Repayment[], total: 0 }
     const pg = res as Paginated<Repayment>
-    if (Array.isArray(pg.results)) return { items: pg.results, total: pg.count }
+    if (Array.isArray(pg.results)) return { items: pg.results, total: pg.count ?? pg.results.length }
     return { items: [] as Repayment[], total: 0 }
   }, [repRes])
   const repayments = repData.items
   const totalRepayments = repData.total
 
   const transactions = useMemo(() => {
-    const res = txRes as ApiFail | Paginated<Transaction> | ApiSuccess<Paginated<Transaction>> | undefined
+    const res = txRes as ApiFail | Paginated<Transaction> | ApiSuccess<Paginated<Transaction> | Transaction[]> | undefined
     if (!res) return [] as Transaction[]
-    if ((res as ApiSuccess<Paginated<Transaction>>).status === true) return (res as ApiSuccess<Paginated<Transaction>>).data.results
+    if ((res as ApiSuccess<Paginated<Transaction> | Transaction[]>).status === true) {
+      const ok = res as ApiSuccess<Paginated<Transaction> | Transaction[]>
+      const d = ok.data as unknown
+      if (Array.isArray(d)) return d
+      const pg = d as Paginated<Transaction>
+      return Array.isArray(pg.results) ? pg.results : []
+    }
     if ((res as ApiFail).status === false) return [] as Transaction[]
     const pg = res as Paginated<Transaction>
     return Array.isArray(pg.results) ? pg.results : []
