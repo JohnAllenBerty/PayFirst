@@ -7,18 +7,27 @@ import { Search, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const TransactionsPage = () => {
-    const [sortAsc, setSortAsc] = useState(true)
     const [page, setPage] = useState(1)
     const pageSize = 10
-    const [query, setQuery] = useState('')
-    const [search, setSearch] = useState('')
+    const [ordering, setOrdering] = useState<string>('label')
+    const [refresh, setRefresh] = useState(0)
+    // Column filter input states (query) and applied filters
+    const [labelQuery, setLabelQuery] = useState('')
+    const [typeQuery, setTypeQuery] = useState<'credit' | 'debit' | ''>('')
+    const [contactQuery, setContactQuery] = useState<number | ''>('')
+    const [filters, setFilters] = useState<{ label?: string; _type?: 'credit' | 'debit'; contact?: number }>({})
     const { data: txRes, isLoading: loadingTx, isFetching: fetchingTx } = useListTransactionsQuery({
         page,
         page_size: pageSize,
-        search: search || undefined,
-        ordering: sortAsc ? 'label' : '-label',
+        ordering,
+        refresh,
+        // Column filters (backend may accept these specific fields)
+        label: filters.label || undefined,
+        _type: filters._type || undefined,
+        contact: typeof filters.contact === 'number' ? filters.contact : undefined,
     })
     const { data: contactsRes, isLoading: loadingContacts } = useListContactsQuery({ page_size: 1000 })
     const [createTx, { isLoading: creating }] = useCreateTransactionMutation()
@@ -70,9 +79,9 @@ const TransactionsPage = () => {
     const [returnDate, setReturnDate] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
-    // No debounce; search triggered by Enter or button click only
+    // No debounce; filters apply only on Enter/Apply
 
-    const filteredTx = transactions // server-side filtering
+    const filteredTx = transactions // server handles filtering and sorting
     const [viewingId, setViewingId] = useState<number | null>(null)
     const [editingId, setEditingId] = useState<number | null>(null)
     const [editLabel, setEditLabel] = useState('')
@@ -101,7 +110,7 @@ const TransactionsPage = () => {
             }).unwrap()
             setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate('')
             toast.success(extractSuccessMessage(res, 'Transaction created'))
-            refetchTx()
+            setRefresh((c) => c + 1)
             return true
         } catch (e) {
             const msg = extractErrorMessage(e)
@@ -121,7 +130,7 @@ const TransactionsPage = () => {
             {failMessage && (
                 <div className="max-w-xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between gap-3">
                     <span>{failMessage}</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => refetchTx()}>Retry</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setRefresh((c) => c + 1)}>Retry</Button>
                 </div>
             )}
 
@@ -133,80 +142,126 @@ const TransactionsPage = () => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All transactions</h2>
-                    <div className="flex items-center gap-2 text-sm">
-                        <div className="relative">
-                            <Input
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value) }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }
-                                }}
-                                placeholder="Search label or contact…"
-                                className="pl-8 pr-20 h-9 w-64"
-                            />
-                            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-1">
-                                <span className="h-5 w-px bg-border mr-1" aria-hidden="true" />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    aria-label="Search"
-                                    title="Search"
-                                    className="h-9 px-2"
-                                    disabled={fetchingTx}
-                                    onClick={() => {
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }}
-                                >
-                                    Search
-                                </Button>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setSortAsc(s => !s)} className="gap-1">
-                            {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />} Sort
-                        </Button>
-                    </div>
                 </div>
-                {loadingTx ? (
-                    <div className="grid gap-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="flex items-center justify-between rounded-md border p-3">
-                                <div className="flex items-center gap-3">
-                                    <Skeleton className="h-4 w-48" />
-                                    <Skeleton className="h-4 w-20" />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : filteredTx.length ? (
-                    <ul className="divide-y rounded-md border">
-                        {filteredTx.map((t: Transaction) => (
-                            <li key={t.id} className="p-3 text-sm flex items-center justify-between">
-                                <div>
-                                    <div className="font-medium">{t.label}</div>
-                                    <div className="text-muted-foreground">{t._type} · {t.amount} · pending {t.pending_amount}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" onClick={() => setViewingId(t.id)}>View</Button>
-                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); }}>Edit</Button>
-                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(t.id)} disabled={deleting}>Delete</Button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div className="text-sm text-muted-foreground">No transactions found</div>
-                )}
+                <div className="rounded-md border overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
+                                    <span className="inline-flex items-center gap-1">Label {ordering.includes('label') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
+                                    <span className="inline-flex items-center gap-1">Amount {ordering.includes('amount') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead>Pending</TableHead>
+                                <TableHead>Contact</TableHead>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
+                                    <span className="inline-flex items-center gap-1">Date {ordering.includes('date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'return_date' ? '-return_date' : 'return_date')}>
+                                    <span className="inline-flex items-center gap-1">Return date {ordering.includes('return_date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
+                            </TableRow>
+                            {/* Filters */}
+                            <TableRow>
+                                <TableCell>
+                                    <div className="relative">
+                                        <Input
+                                            value={labelQuery}
+                                            onChange={(e) => setLabelQuery(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ ...filters, label: labelQuery.trim() || undefined }); setPage(1) } }}
+                                            placeholder="Filter label…"
+                                            className="pl-8 h-8"
+                                        />
+                                        <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <select className="h-8 rounded-md border bg-background px-2 text-sm" value={typeQuery} onChange={(e) => setTypeQuery((e.target.value as 'credit' | 'debit' | ''))}>
+                                        <option value="">All</option>
+                                        <option value="credit">Credit</option>
+                                        <option value="debit">Debit</option>
+                                    </select>
+                                </TableCell>
+                                <TableCell />
+                                <TableCell />
+                                <TableCell>
+                                    <select className="h-8 rounded-md border bg-background px-2 text-sm" value={contactQuery} onChange={(e) => setContactQuery(e.target.value ? Number(e.target.value) : '')}>
+                                        <option value="">All contacts</option>
+                                        {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="text-right pr-3">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2"
+                                        disabled={fetchingTx}
+                                        onClick={() => {
+                                            const next: { label?: string; _type?: 'credit' | 'debit'; contact?: number } = {}
+                                            const lbl = labelQuery.trim()
+                                            if (lbl) next.label = lbl
+                                            if (typeQuery) next._type = typeQuery
+                                            if (typeof contactQuery === 'number') next.contact = contactQuery
+                                            setFilters(next)
+                                            setPage(1)
+                                        }}
+                                    >
+                                        Apply
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loadingTx ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : filteredTx.length ? (
+                                filteredTx.map((t: Transaction) => (
+                                    <TableRow key={t.id}>
+                                        <TableCell className="font-medium">{t.label}</TableCell>
+                                        <TableCell className="uppercase">{t._type}</TableCell>
+                                        <TableCell>{t.amount}</TableCell>
+                                        <TableCell className="text-muted-foreground">{t.pending_amount}</TableCell>
+                                        <TableCell>{contacts.find(c => c.id === t.contact)?.name || t.contact}</TableCell>
+                                        <TableCell>{t.date}</TableCell>
+                                        <TableCell>{t.return_date || '—'}</TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => setViewingId(t.id)}>View</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); }}>Edit</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(t.id)} disabled={deleting}>Delete</Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="text-sm text-muted-foreground">No transactions found</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
                 {totalTransactions > pageSize && (
                     <div className="flex items-center justify-end gap-2 pt-2">
                         <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>

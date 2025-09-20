@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Search, ArrowUpAZ, ArrowDownAZ, FolderTree, LayoutList } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 // Tree node type for rendering hierarchical groups
 type GroupTreeNode = { id: number; name: string; parent_group?: number | null; children: GroupTreeNode[] }
@@ -76,10 +77,10 @@ function GroupNode({
 }
 
 const ContactGroupList = () => {
-    const [sortAsc, setSortAsc] = useState(true)
-    const [query, setQuery] = useState('')
-    const [search, setSearch] = useState('')
-    const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering: sortAsc ? 'name' : '-name', search: search || undefined })
+    const [ordering, setOrdering] = useState<string>('name')
+    const [nameQuery, setNameQuery] = useState('')
+    const [filters, setFilters] = useState<{ name?: string }>({})
+    const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering, name: filters.name || undefined })
     const [createGroup, { isLoading: creating }] = useCreateContactGroupMutation()
     const [updateGroup, { isLoading: updating }] = useUpdateContactGroupMutation()
     const [deleteGroup, { isLoading: deleting }] = useDeleteContactGroupMutation()
@@ -205,16 +206,16 @@ const ContactGroupList = () => {
                     <div className="flex items-center gap-2 text-sm">
                         <div className="relative">
                             <Input
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value) }}
+                                value={nameQuery}
+                                onChange={(e) => { setNameQuery(e.target.value) }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        setSearch(query.trim().toLowerCase())
+                                        setFilters({ name: nameQuery.trim() || undefined })
                                         setPage(1)
                                     }
                                 }}
-                                placeholder="Search groups…"
+                                placeholder="Filter name…"
                                 className="pl-8 pr-20 h-9 w-56"
                             />
                             <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
@@ -223,21 +224,21 @@ const ContactGroupList = () => {
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    aria-label="Search"
-                                    title="Search"
+                                    aria-label="Apply"
+                                    title="Apply"
                                     className="h-9 px-2"
                                     disabled={isFetching}
                                     onClick={() => {
-                                        setSearch(query.trim().toLowerCase())
+                                        setFilters({ name: nameQuery.trim() || undefined })
                                         setPage(1)
                                     }}
                                 >
-                                    Search
+                                    Apply
                                 </Button>
                             </div>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setSortAsc(s => !s)} className="gap-1">
-                            {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />} Sort
+                        <Button variant="outline" size="sm" onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')} className="gap-1">
+                            {ordering.includes('name') && ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />} Sort
                         </Button>
                         <Button variant={treeView ? 'default' : 'outline'} size="sm" className="gap-1" onClick={() => setTreeView(true)}>
                             <FolderTree className="size-4" /> Tree
@@ -279,25 +280,54 @@ const ContactGroupList = () => {
                             ))}
                         </ul>
                     ) : (
-                        <ul className="divide-y rounded-md border">
-                            {allGroups
-                                .slice((page - 1) * pageSize, page * pageSize)
-                                .map(g => (
-                                    <li key={g.id} className="p-3 text-sm flex items-center justify-between">
-                                        <div>
-                                            <div className="font-medium">{g.name}</div>
-                                            {g.parent_group && (
-                                                <div className="text-muted-foreground">Parent: {idToName.get(g.parent_group) || g.parent_group}</div>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button size="sm" variant="outline" onClick={() => setViewingId(g.id)}>View</Button>
-                                            <Button size="sm" variant="outline" onClick={() => { setEditingId(g.id); setEditName(g.name); setEditParent(g.parent_group ?? ''); }}>Edit</Button>
-                                            <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(g.id)} disabled={deleting}>Delete</Button>
-                                        </div>
-                                    </li>
-                                ))}
-                        </ul>
+                        <div className="rounded-md border overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')}>
+                                            <span className="inline-flex items-center gap-1">Name {ordering.includes('name') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                        </TableHead>
+                                        <TableHead>Parent</TableHead>
+                                        <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell>
+                                            <div className="relative">
+                                                <Input
+                                                    value={nameQuery}
+                                                    onChange={(e) => setNameQuery(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ name: nameQuery.trim() || undefined }); setPage(1) } }}
+                                                    placeholder="Filter name…"
+                                                    className="pl-8 h-8"
+                                                />
+                                                <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                                            </div>
+                                        </TableCell>
+                                        <TableCell />
+                                        <TableCell className="text-right pr-3">
+                                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={isFetching} onClick={() => { setFilters({ name: nameQuery.trim() || undefined }); setPage(1) }}>Apply</Button>
+                                        </TableCell>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {allGroups
+                                        .slice((page - 1) * pageSize, page * pageSize)
+                                        .map(g => (
+                                            <TableRow key={g.id}>
+                                                <TableCell className="font-medium">{g.name}</TableCell>
+                                                <TableCell className="text-muted-foreground">{g.parent_group ? (idToName.get(g.parent_group) || g.parent_group) : '—'}</TableCell>
+                                                <TableCell className="text-right pr-3">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button size="sm" variant="outline" onClick={() => setViewingId(g.id)}>View</Button>
+                                                        <Button size="sm" variant="outline" onClick={() => { setEditingId(g.id); setEditName(g.name); setEditParent(g.parent_group ?? ''); }}>Edit</Button>
+                                                        <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(g.id)} disabled={deleting}>Delete</Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )
                 ) : (
                     <div className="text-sm text-muted-foreground">No groups found</div>

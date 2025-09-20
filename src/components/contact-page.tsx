@@ -5,22 +5,27 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'react-toastify'
-import { Search, ArrowDownAZ, ArrowUpAZ } from 'lucide-react'
+import { Search, ArrowDownAZ, ArrowUpAZ, ChevronDown, ChevronRight, FolderTree, LayoutList } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const ContactPage = () => {
-    const [sortAsc, setSortAsc] = useState(true)
+    const [ordering, setOrdering] = useState<string>('name')
     const [page, setPage] = useState(1)
     const pageSize = 10
+    const [treeView, setTreeView] = useState(false)
     const [query, setQuery] = useState('')
-    const [search, setSearch] = useState('')
+    const [filters, setFilters] = useState<{ name: string }>({ name: '' })
 
+    const [refresh, setRefresh] = useState(0)
     const { data: contactsRes, isLoading: loadingContacts, isFetching: fetchingContacts } = useListContactsQuery({
-        page,
-        page_size: pageSize,
-        search: search || undefined,
-        ordering: sortAsc ? 'name' : '-name',
+        page: treeView ? 1 : page,
+        page_size: treeView ? 1000 : pageSize,
+        ordering,
+        // Column filters (backend should support these params or ignore unknowns)
+        name: filters.name || undefined,
+        refresh, // noop param to force refetch on demand
     })
     const { data: groupsRes, isLoading: loadingGroups, refetch: refetchGroups } = useListContactGroupsQuery()
     const [createContact, { isLoading: creating }] = useCreateContactMutation()
@@ -84,6 +89,115 @@ const ContactPage = () => {
         }
     }
 
+    // Build Group tree for tree view
+    type GroupTreeNode = { id: number; name: string; parent_group?: number | null; children: GroupTreeNode[] }
+    const hasNested = useMemo(() => Array.isArray(groups) && groups.some((g: ContactGroup & { subgroups?: ContactGroup[] }) => Array.isArray(g.subgroups) && g.subgroups.length > 0), [groups])
+    const groupTree: GroupTreeNode[] = useMemo(() => {
+        if (!groups) return []
+        if (hasNested) {
+            const toNode = (g: ContactGroup & { subgroups?: ContactGroup[] }): GroupTreeNode => ({ id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: Array.isArray(g.subgroups) ? g.subgroups.map(toNode) : [] })
+            return (groups as (ContactGroup & { subgroups?: ContactGroup[] })[]).map(toNode)
+        }
+        const byId = new Map<number, GroupTreeNode>()
+        const roots: GroupTreeNode[] = []
+        ;(groups as ContactGroup[]).forEach((g) => byId.set(g.id, { id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: [] }))
+        ;(groups as ContactGroup[]).forEach((g) => {
+            const node = byId.get(g.id)!
+            if (g.parent_group && byId.has(g.parent_group)) {
+                byId.get(g.parent_group)!.children.push(node)
+            } else {
+                roots.push(node)
+            }
+        })
+        return roots
+    }, [groups, hasNested])
+
+    const contactsByGroup = useMemo(() => {
+        const map = new Map<number, Contact[]>()
+        contacts.forEach((c) => {
+            const gs = c.groups || []
+            gs.forEach((gid) => {
+                const list = map.get(gid) || []
+                list.push(c)
+                map.set(gid, list)
+            })
+        })
+        return map
+    }, [contacts])
+
+    const ungroupedContacts = useMemo(() => contacts.filter((c) => !c.groups || c.groups.length === 0), [contacts])
+
+    type TreeGroupNodeProps = {
+        node: GroupTreeNode
+        depth: number
+        contactsByGroup: Map<number, Contact[]>
+        onView: (id: number) => void
+        onEdit: (c: Contact) => void
+        onDelete: (id: number) => void
+    }
+
+    const TreeGroupNode: React.FC<TreeGroupNodeProps> = ({ node, depth, contactsByGroup, onView, onEdit, onDelete }) => {
+        const [open, setOpen] = React.useState(true)
+        const children = node.children || []
+        const contactList = contactsByGroup.get(node.id) || []
+        const hasChildren = children.length > 0
+        const hasContacts = contactList.length > 0
+        return (
+            <li className="text-sm" style={{ paddingLeft: depth * 12 }}>
+                <div className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center gap-2">
+                        {(hasChildren || hasContacts) ? (
+                            <button type="button" aria-label={open ? 'Collapse' : 'Expand'} className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(o => !o)}>
+                                {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                            </button>
+                        ) : (
+                            <span className="inline-block w-4" />
+                        )}
+                        <div className="font-medium flex items-center gap-2">
+                            <span>{node.name}</span>
+                            {(hasContacts || hasChildren) && (
+                                <span className="text-xs text-muted-foreground">({contactList.length}{hasChildren ? `, ${children.length} sub` : ''})</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                {open && (
+                    <div className="ml-3">
+                        {hasContacts && (
+                            <ul className="space-y-1">
+                                {contactList.map((c) => (
+                                    <li key={c.id} className="flex items-center justify-between">
+                                        <span>{c.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <Button size="sm" variant="outline" onClick={() => onView(c.id)}>View</Button>
+                                            <Button size="sm" variant="outline" onClick={() => onEdit(c)}>Edit</Button>
+                                            <Button size="sm" variant="destructive" onClick={() => onDelete(c.id)} disabled={deleting}>Delete</Button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {children.length > 0 && (
+                            <ul className="border-l pl-3 mt-1">
+                                {children.map((child) => (
+                                    <TreeGroupNode
+                                        key={child.id}
+                                        node={child}
+                                        depth={depth + 1}
+                                        contactsByGroup={contactsByGroup}
+                                        onView={onView}
+                                        onEdit={onEdit}
+                                        onDelete={onDelete}
+                                    />
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
+            </li>
+        )
+    }
+
     return (
         <div className="space-y-6">
             <div>
@@ -106,84 +220,187 @@ const ContactPage = () => {
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All contacts</h2>
                     <div className="flex items-center gap-2 text-sm">
-                        <div className="relative">
-                            <Input
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value) }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }
-                                }}
-                                placeholder="Search contacts…"
-                                className="pl-8 pr-20 h-9 w-56"
-                            />
-                            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-1">
-                                <span className="h-5 w-px bg-border mr-1" aria-hidden="true" />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    aria-label="Search"
-                                    title="Search"
-                                    className="h-9 px-2"
-                                    disabled={fetchingContacts}
-                                    onClick={() => {
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }}
-                                >
-                                    Search
-                                </Button>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setSortAsc(s => !s)} className="gap-1">
-                            {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />} Sort
+                        <Button variant={treeView ? 'default' : 'outline'} size="sm" className="gap-1" onClick={() => { setTreeView(true); setPage(1) }}>
+                            <FolderTree className="size-4" /> Tree
+                        </Button>
+                        <Button variant={!treeView ? 'default' : 'outline'} size="sm" className="gap-1" onClick={() => setTreeView(false)}>
+                            <LayoutList className="size-4" /> List
                         </Button>
                     </div>
                 </div>
                 {contactsFailMessage && (
                     <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between gap-3">
                         <span>{contactsFailMessage}</span>
-                        <Button type="button" size="sm" variant="outline" onClick={() => refetchContacts()}>Retry</Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setRefresh((c) => c + 1)}>Retry</Button>
                     </div>
                 )}
-                {loadingContacts ? (
-                    <div className="grid gap-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="flex items-center justify-between rounded-md border p-3">
-                                <div className="flex items-center gap-3">
-                                    <Skeleton className="h-4 w-40" />
-                                    <Skeleton className="h-4 w-24" />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : contacts.length ? (
-                    <ul className="divide-y rounded-md border">
-                        {contacts.map((c) => (
-                            <li key={c.id} className="p-3 text-sm flex items-center justify-between">
-                                <div>
-                                    <div className="font-medium">{c.name}</div>
-                                    <div className="text-muted-foreground">{c.groups?.length ?? 0} groups</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
-                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []); }}>Edit</Button>
-                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
+                {!treeView ? (
+                <div className="rounded-md border overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead
+                                    className="cursor-pointer select-none"
+                                    onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')}
+                                >
+                                    <span className="inline-flex items-center gap-1">
+                                        Name {ordering.includes('name') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}
+                                    </span>
+                                </TableHead>
+                                <TableHead>Groups</TableHead>
+                                <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
+                            </TableRow>
+                            {/* Filters row */}
+                            <TableRow>
+                                <TableCell>
+                                    <div className="relative">
+                                        <Input
+                                            value={query}
+                                            onChange={(e) => { setQuery(e.target.value) }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    setFilters({ name: query.trim().toLowerCase() })
+                                                    setPage(1)
+                                                }
+                                            }}
+                                            placeholder="Filter name…"
+                                            className="pl-8 h-8"
+                                        />
+                                        <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                                    </div>
+                                </TableCell>
+                                <TableCell />
+                                <TableCell className="text-right pr-3">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2"
+                                        disabled={fetchingContacts}
+                                        onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}
+                                    >
+                                        Apply
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loadingContacts ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : contacts.length ? (
+                                contacts.map((c) => (
+                                    <TableRow key={c.id}>
+                                        <TableCell>
+                                            <div className="font-medium">{c.name}</div>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {(() => {
+                                                const idToGroup = new Map<number, ContactGroup>()
+                                                groups.forEach(g => idToGroup.set(g.id, g))
+                                                const toPath = (gid: number): string => {
+                                                    const segs: string[] = []
+                                                    let cur: ContactGroup | undefined = idToGroup.get(gid)
+                                                    const guard = new Set<number>()
+                                                    while (cur && !guard.has(cur.id)) {
+                                                        guard.add(cur.id)
+                                                        segs.unshift(cur.name)
+                                                        if (cur.parent_group && idToGroup.has(cur.parent_group)) {
+                                                            cur = idToGroup.get(cur.parent_group)
+                                                        } else {
+                                                            break
+                                                        }
+                                                    }
+                                                    return segs.join(' > ')
+                                                }
+                                                const ids = c.groups || []
+                                                if (!ids.length) return '—'
+                                                const paths = ids.map(toPath).filter(Boolean)
+                                                return paths.length ? paths.join(', ') : (ids.map(id => idToGroup.get(id)?.name || String(id)).join(', '))
+                                            })()}
+                                        </TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []); }}>Edit</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                                        No contacts found
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
                 ) : (
-                    <div className="text-sm text-muted-foreground">No contacts found</div>
+                <div className="rounded-md border divide-y">
+                    {/* Filters row for Tree view */}
+                    <div className="flex items-center justify-between p-2">
+                        <div className="relative">
+                            <Input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ name: query.trim().toLowerCase() }); setPage(1) } }}
+                                placeholder="Filter name…"
+                                className="pl-8 h-8 w-64"
+                            />
+                            <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={fetchingContacts} onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}>Apply</Button>
+                    </div>
+                    <ul className="p-2">
+                        {groupTree.map((node) => (
+                            <TreeGroupNode
+                                key={node.id}
+                                node={node}
+                                depth={0}
+                                contactsByGroup={contactsByGroup}
+                                onView={(id) => setViewingId(id)}
+                                onEdit={(c) => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}
+                                onDelete={(id) => setConfirmDeleteId(id)}
+                            />
+                        ))}
+                        {/* Ungrouped contacts */}
+                        {ungroupedContacts.length > 0 && (
+                            <li className="pt-2">
+                                <div className="font-medium text-sm mb-1">Ungrouped</div>
+                                <ul className="ml-3 space-y-1">
+                                    {ungroupedContacts.map((c) => (
+                                        <li key={c.id} className="flex items-center justify-between text-sm">
+                                            <span>{c.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}>Edit</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </li>
+                        )}
+                        {groupTree.length === 0 && ungroupedContacts.length === 0 && (
+                            <li className="text-sm text-muted-foreground">No contacts found</li>
+                        )}
+                    </ul>
+                </div>
                 )}
                 {totalContacts > pageSize && (
                     <div className="flex items-center justify-end gap-2 pt-2">
@@ -193,6 +410,7 @@ const ContactPage = () => {
                     </div>
                 )}
             </div>
+            {/* TreeGroupNode component defined above is used in tree view */}
 
             {/* Create modal */}
             {createOpen && (

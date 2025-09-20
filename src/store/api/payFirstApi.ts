@@ -58,7 +58,7 @@ export type ListParams = {
     page_size?: number;
     search?: string;
     ordering?: string; // e.g., 'name' or '-name'
-};
+} & Record<string, string | number | boolean | undefined>;
 
 async function handle401Response() {
     // Redirect to login on unauthorized

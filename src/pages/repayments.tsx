@@ -8,26 +8,32 @@ import { toast } from 'react-toastify'
 import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction } from '@/store/api/payFirstApi'
 import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation } from '@/store/api/payFirstApi'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const RepaymentsPage = () => {
-    const [sortAsc, setSortAsc] = useState(true)
     const [page, setPage] = useState(1)
     const pageSize = 10
-    const [query, setQuery] = useState('')
-    const [search, setSearch] = useState('')
+    const [ordering, setOrdering] = useState<string>('label')
+    const [refresh, setRefresh] = useState(0)
+    // Filters: query inputs and applied filters
+    const [labelQuery, setLabelQuery] = useState('')
+    const [txQuery, setTxQuery] = useState<number | ''>('')
+    const [filters, setFilters] = useState<{ label?: string; transaction?: number }>({})
 
     const { data: repRes, isLoading: loadingRep, isFetching: fetchingRep } = useListRepaymentsQuery({
         page,
         page_size: pageSize,
-        search: search || undefined,
-        ordering: sortAsc ? 'label' : '-label',
+        ordering,
+        refresh,
+        label: filters.label || undefined,
+        transaction: typeof filters.transaction === 'number' ? filters.transaction : undefined,
     })
     const { data: txRes, isLoading: loadingTx } = useListTransactionsQuery({ page_size: 1000 })
     const [createRep, { isLoading: creating }] = useCreateRepaymentMutation()
     const [updateRep, { isLoading: updating }] = useUpdateRepaymentMutation()
     const [deleteRep, { isLoading: deleting }] = useDeleteRepaymentMutation()
 
-    // No debounce; search triggers only on Enter/click
+    // No debounce; filters applied on Enter/Apply only
 
     const repData = useMemo(() => {
         const res = repRes as ApiFail | Paginated<Repayment> | ApiSuccess<Paginated<Repayment> | Repayment[]> | undefined
@@ -104,7 +110,7 @@ const RepaymentsPage = () => {
             }).unwrap()
             setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate('')
             toast.success(extractSuccessMessage(res, 'Repayment created'))
-            refetchRep()
+            setRefresh((c) => c + 1)
             return true
         } catch (e) {
             const msg = extractErrorMessage(e)
@@ -126,7 +132,7 @@ const RepaymentsPage = () => {
             {failMessage && (
                 <div className="max-w-xl rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-center justify-between gap-3">
                     <span>{failMessage}</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => refetchRep()}>Retry</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setRefresh((c) => c + 1)}>Retry</Button>
                 </div>
             )}
 
@@ -138,80 +144,111 @@ const RepaymentsPage = () => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All repayments</h2>
-                    <div className="flex items-center gap-2 text-sm">
-                        <div className="relative">
-                            <Input
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value) }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }
-                                }}
-                                placeholder="Search label or remarks…"
-                                className="pl-8 pr-20 h-9 w-64"
-                            />
-                            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-1">
-                                <span className="h-5 w-px bg-border mr-1" aria-hidden="true" />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    aria-label="Search"
-                                    title="Search"
-                                    className="h-9 px-2"
-                                    disabled={fetchingRep}
-                                    onClick={() => {
-                                        setSearch(query.trim().toLowerCase())
-                                        setPage(1)
-                                    }}
-                                >
-                                    Search
-                                </Button>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setSortAsc(s => !s)} className="gap-1">
-                            {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />} Sort
-                        </Button>
-                    </div>
                 </div>
-                {loadingRep ? (
-                    <div className="grid gap-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="flex items-center justify-between rounded-md border p-3">
-                                <div className="flex items-center gap-3">
-                                    <Skeleton className="h-4 w-48" />
-                                    <Skeleton className="h-4 w-20" />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                    <Skeleton className="h-8 w-16" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : filtered.length ? (
-                    <ul className="divide-y rounded-md border">
-                        {filtered.map((r: Repayment) => (
-                            <li key={r.id} className="p-3 text-sm flex items-center justify-between">
-                                <div>
-                                    <div className="font-medium">{r.label}</div>
-                                    <div className="text-muted-foreground">{r.amount} · {r.remarks}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" variant="outline" onClick={() => setViewingId(r.id)}>View</Button>
-                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); }}>Edit</Button>
-                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(r.id)} disabled={deleting}>Delete</Button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div className="text-sm text-muted-foreground">No repayments found</div>
-                )}
+                <div className="rounded-md border overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
+                                    <span className="inline-flex items-center gap-1">Label {ordering.includes('label') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
+                                    <span className="inline-flex items-center gap-1">Amount {ordering.includes('amount') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
+                                    <span className="inline-flex items-center gap-1">Date {ordering.includes('date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
+                                </TableHead>
+                                <TableHead>Remarks</TableHead>
+                                <TableHead>Transaction</TableHead>
+                                <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
+                            </TableRow>
+                            {/* Filters */}
+                            <TableRow>
+                                <TableCell>
+                                    <div className="relative">
+                                        <Input
+                                            value={labelQuery}
+                                            onChange={(e) => setLabelQuery(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ ...filters, label: labelQuery.trim() || undefined }); setPage(1) } }}
+                                            placeholder="Filter label…"
+                                            className="pl-8 h-8"
+                                        />
+                                        <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                                    </div>
+                                </TableCell>
+                                <TableCell />
+                                <TableCell />
+                                <TableCell />
+                                <TableCell>
+                                    <select className="h-8 rounded-md border bg-background px-2 text-sm" value={txQuery} onChange={(e) => setTxQuery(e.target.value ? Number(e.target.value) : '')}>
+                                        <option value="">All transactions</option>
+                                        {transactions.map((t: Transaction) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                    </select>
+                                </TableCell>
+                                <TableCell className="text-right pr-3">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 px-2"
+                                        disabled={fetchingRep}
+                                        onClick={() => {
+                                            const next: { label?: string; transaction?: number } = {}
+                                            const lbl = labelQuery.trim()
+                                            if (lbl) next.label = lbl
+                                            if (typeof txQuery === 'number') next.transaction = txQuery
+                                            setFilters(next)
+                                            setPage(1)
+                                        }}
+                                    >
+                                        Apply
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loadingRep ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                                <Skeleton className="h-8 w-16" />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : filtered.length ? (
+                                filtered.map((r: Repayment) => (
+                                    <TableRow key={r.id}>
+                                        <TableCell className="font-medium">{r.label}</TableCell>
+                                        <TableCell>{r.amount}</TableCell>
+                                        <TableCell>{r.date}</TableCell>
+                                        <TableCell className="text-muted-foreground">{r.remarks || '—'}</TableCell>
+                                        <TableCell>{transactions.find((t: Transaction) => t.id === r.transaction)?.label || r.transaction}</TableCell>
+                                        <TableCell className="text-right pr-3">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => setViewingId(r.id)}>View</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); }}>Edit</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(r.id)} disabled={deleting}>Delete</Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-sm text-muted-foreground">No repayments found</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
                 {totalRepayments > pageSize && (
                     <div className="flex items-center justify-end gap-2 pt-2">
                         <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
