@@ -15,6 +15,7 @@ import {
   SidebarMenuButton,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useProfileQuery, type ApiSuccess, type ApiFail, type Profile } from "@/store/api/payFirstApi"
 
 // This is sample data.
 const data = {
@@ -82,6 +83,22 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: profileRes } = useProfileQuery()
+  const userFromProfile = React.useMemo(() => {
+    const fallback = { name: "User", email: "", avatar: "" }
+    if (profileRes && typeof profileRes !== 'string') {
+      const res = profileRes as ApiSuccess<Profile> | ApiFail
+      if (res.status) {
+        const p = res.data
+        const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
+        const name = fullName || p.username || 'User'
+        // Our Profile type doesn't include email; show username in the subline if available
+        const email = p.username || ''
+        return { name, email, avatar: "" }
+      }
+    }
+    return fallback
+  }, [profileRes])
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -104,7 +121,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={userFromProfile} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
