@@ -121,7 +121,6 @@ function ProfileEditor({ user, first_name, last_name, date_joined, last_login, d
             </CardHeader>
             <CardContent className="grid gap-4">
                 <div className="text-xs text-muted-foreground grid gap-1">
-                    <div><span className="text-muted-foreground">User:</span> {user}</div>
                     <div><span className="text-muted-foreground">Joined:</span> {new Date(date_joined).toLocaleString()}</div>
                     <div><span className="text-muted-foreground">Last login:</span> {new Date(last_login).toLocaleString()}</div>
                 </div>
