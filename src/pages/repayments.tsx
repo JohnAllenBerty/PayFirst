@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -14,12 +14,12 @@ const RepaymentsPage = () => {
     const [page, setPage] = useState(1)
     const pageSize = 10
     const [query, setQuery] = useState('')
-    const [debouncedQuery, setDebouncedQuery] = useState('')
+    const [search, setSearch] = useState('')
 
-    const { data: repRes, isLoading: loadingRep, isFetching: fetchingRep, refetch: refetchRep } = useListRepaymentsQuery({
+    const { data: repRes, isLoading: loadingRep, isFetching: fetchingRep } = useListRepaymentsQuery({
         page,
         page_size: pageSize,
-        search: debouncedQuery || undefined,
+        search: search || undefined,
         ordering: sortAsc ? 'label' : '-label',
     })
     const { data: txRes, isLoading: loadingTx } = useListTransactionsQuery({ page_size: 1000 })
@@ -27,10 +27,7 @@ const RepaymentsPage = () => {
     const [updateRep, { isLoading: updating }] = useUpdateRepaymentMutation()
     const [deleteRep, { isLoading: deleting }] = useDeleteRepaymentMutation()
 
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
-        return () => clearTimeout(t)
-    }, [query])
+    // No debounce; search triggers only on Enter/click
 
     const repData = useMemo(() => {
         const res = repRes as ApiFail | Paginated<Repayment> | ApiSuccess<Paginated<Repayment> | Repayment[]> | undefined
@@ -145,13 +142,12 @@ const RepaymentsPage = () => {
                         <div className="relative">
                             <Input
                                 value={query}
-                                onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+                                onChange={(e) => { setQuery(e.target.value) }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchRep()
                                     }
                                 }}
                                 placeholder="Search label or remarks…"
@@ -168,9 +164,8 @@ const RepaymentsPage = () => {
                                     className="h-9 px-2"
                                     disabled={fetchingRep}
                                     onClick={() => {
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchRep()
                                     }}
                                 >
                                     Search

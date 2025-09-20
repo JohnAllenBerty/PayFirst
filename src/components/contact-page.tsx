@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useListContactsQuery, useCreateContactMutation, useListContactGroupsQuery, useUpdateContactMutation, useDeleteContactMutation, type ApiSuccess, type ApiFail, type Paginated, type Contact, type ContactGroup } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,12 +14,12 @@ const ContactPage = () => {
     const [page, setPage] = useState(1)
     const pageSize = 10
     const [query, setQuery] = useState('')
-    const [debouncedQuery, setDebouncedQuery] = useState('')
+    const [search, setSearch] = useState('')
 
-    const { data: contactsRes, isLoading: loadingContacts, isFetching: fetchingContacts, refetch: refetchContacts } = useListContactsQuery({
+    const { data: contactsRes, isLoading: loadingContacts, isFetching: fetchingContacts } = useListContactsQuery({
         page,
         page_size: pageSize,
-        search: debouncedQuery || undefined,
+        search: search || undefined,
         ordering: sortAsc ? 'name' : '-name',
     })
     const { data: groupsRes, isLoading: loadingGroups, refetch: refetchGroups } = useListContactGroupsQuery()
@@ -32,10 +32,7 @@ const ContactPage = () => {
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
 
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
-        return () => clearTimeout(t)
-    }, [query])
+    // typing in the search box does not trigger API; searching occurs on Enter or button click
     const [viewingId, setViewingId] = useState<number | null>(null)
     const [editingId, setEditingId] = useState<number | null>(null)
     const [editName, setEditName] = useState('')
@@ -112,13 +109,12 @@ const ContactPage = () => {
                         <div className="relative">
                             <Input
                                 value={query}
-                                onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+                                onChange={(e) => { setQuery(e.target.value) }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchContacts()
                                     }
                                 }}
                                 placeholder="Search contacts…"
@@ -135,9 +131,8 @@ const ContactPage = () => {
                                     className="h-9 px-2"
                                     disabled={fetchingContacts}
                                     onClick={() => {
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchContacts()
                                     }}
                                 >
                                     Search

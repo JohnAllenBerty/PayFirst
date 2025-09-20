@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,11 +13,11 @@ const TransactionsPage = () => {
     const [page, setPage] = useState(1)
     const pageSize = 10
     const [query, setQuery] = useState('')
-    const [debouncedQuery, setDebouncedQuery] = useState('')
-    const { data: txRes, isLoading: loadingTx, isFetching: fetchingTx, refetch: refetchTx } = useListTransactionsQuery({
+    const [search, setSearch] = useState('')
+    const { data: txRes, isLoading: loadingTx, isFetching: fetchingTx } = useListTransactionsQuery({
         page,
         page_size: pageSize,
-        search: debouncedQuery || undefined,
+        search: search || undefined,
         ordering: sortAsc ? 'label' : '-label',
     })
     const { data: contactsRes, isLoading: loadingContacts } = useListContactsQuery({ page_size: 1000 })
@@ -70,10 +70,7 @@ const TransactionsPage = () => {
     const [returnDate, setReturnDate] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
-        return () => clearTimeout(t)
-    }, [query])
+    // No debounce; search triggered by Enter or button click only
 
     const filteredTx = transactions // server-side filtering
     const [viewingId, setViewingId] = useState<number | null>(null)
@@ -140,13 +137,12 @@ const TransactionsPage = () => {
                         <div className="relative">
                             <Input
                                 value={query}
-                                onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+                                onChange={(e) => { setQuery(e.target.value) }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchTx()
                                     }
                                 }}
                                 placeholder="Search label or contact…"
@@ -163,9 +159,8 @@ const TransactionsPage = () => {
                                     className="h-9 px-2"
                                     disabled={fetchingTx}
                                     onClick={() => {
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetchTx()
                                     }}
                                 >
                                     Search

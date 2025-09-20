@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useListContactGroupsQuery, useCreateContactGroupMutation, useUpdateContactGroupMutation, useDeleteContactGroupMutation, type ApiSuccess, type ApiFail, type ContactGroup } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -78,12 +78,8 @@ function GroupNode({
 const ContactGroupList = () => {
     const [sortAsc, setSortAsc] = useState(true)
     const [query, setQuery] = useState('')
-    const [debouncedQuery, setDebouncedQuery] = useState('')
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
-        return () => clearTimeout(t)
-    }, [query])
-    const { data: groupsRes, isLoading, isFetching, refetch } = useListContactGroupsQuery({ ordering: sortAsc ? 'name' : '-name', search: debouncedQuery || undefined })
+    const [search, setSearch] = useState('')
+    const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering: sortAsc ? 'name' : '-name', search: search || undefined })
     const [createGroup, { isLoading: creating }] = useCreateContactGroupMutation()
     const [updateGroup, { isLoading: updating }] = useUpdateContactGroupMutation()
     const [deleteGroup, { isLoading: deleting }] = useDeleteContactGroupMutation()
@@ -210,13 +206,12 @@ const ContactGroupList = () => {
                         <div className="relative">
                             <Input
                                 value={query}
-                                onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+                                onChange={(e) => { setQuery(e.target.value) }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetch()
                                     }
                                 }}
                                 placeholder="Search groups…"
@@ -233,9 +228,8 @@ const ContactGroupList = () => {
                                     className="h-9 px-2"
                                     disabled={isFetching}
                                     onClick={() => {
-                                        setDebouncedQuery(query.trim().toLowerCase())
+                                        setSearch(query.trim().toLowerCase())
                                         setPage(1)
-                                        refetch()
                                     }}
                                 >
                                     Search
