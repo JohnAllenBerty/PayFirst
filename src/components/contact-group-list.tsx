@@ -83,6 +83,7 @@ const ContactGroupList = () => {
     const [name, setName] = useState('')
     const [parent, setParent] = useState<number | ''>('')
         const [error, setError] = useState<string | null>(null)
+        const [createOpen, setCreateOpen] = useState(false)
     const [sortAsc, setSortAsc] = useState(true)
         const [page, setPage] = useState(1)
         const pageSize = 10
@@ -189,20 +190,19 @@ const ContactGroupList = () => {
                 return nodes.map(walk).filter((c): c is GroupTreeNode => c !== null)
             }
 
-    const onSubmit = async (e: React.FormEvent) => {
+    const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
         e.preventDefault()
         setError(null)
-        if (!name.trim()) {
-            setError('Name is required')
-            return
-        }
+        if (!name.trim()) { setError('Name is required'); return false }
             try {
                 const res = await createGroup({ name: name.trim(), parent_group: parent === '' ? null : parent }).unwrap()
                 setName('')
                 setParent('')
                 toast.success(extractSuccessMessage(res, 'Group created'))
+                return true
         } catch (e) {
             setError(extractErrorMessage(e))
+            return false
         }
     }
 
@@ -219,30 +219,10 @@ const ContactGroupList = () => {
                         </div>
                     )}
 
-                    <form onSubmit={onSubmit} className="grid gap-4 max-w-xl p-4 border rounded-md bg-card">
-                <div className="grid gap-2">
-                    <Label htmlFor="name">Group name</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Friends" />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="parent">Parent group (optional)</Label>
-                    <select
-                        id="parent"
-                        className="h-9 rounded-md border bg-background px-3 text-sm"
-                        value={parent}
-                        onChange={(e) => setParent(e.target.value ? Number(e.target.value) : '')}
-                    >
-                        <option value="">None</option>
-                        {allGroups.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                    </select>
-                </div>
-                {error && <div className="text-sm text-red-600">{error}</div>}
-                <div>
-                    <Button type="submit" disabled={creating}>Create group</Button>
-                </div>
-            </form>
+            <div className="flex items-center justify-between">
+                <div />
+                <Button size="sm" onClick={() => { setCreateOpen(true); setError(null) }}>New Group</Button>
+            </div>
 
                     <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -333,6 +313,42 @@ const ContactGroupList = () => {
                             </div>
                         )}
             </div>
+            {/* Create modal */}
+            {createOpen && (
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
+                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold">New group</h3>
+                            <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+                        </div>
+                        <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="name">Group name</Label>
+                                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Friends" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="parent">Parent group (optional)</Label>
+                                <select
+                                    id="parent"
+                                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                                    value={parent}
+                                    onChange={(e) => setParent(e.target.value ? Number(e.target.value) : '')}
+                                >
+                                    <option value="">None</option>
+                                    {allGroups.map(g => (
+                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {error && <div className="text-sm text-red-600">{error}</div>}
+                            <div className="flex items-center justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={creating}>Create</Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             {/* View modal */}
             {viewingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setViewingId(null)}>

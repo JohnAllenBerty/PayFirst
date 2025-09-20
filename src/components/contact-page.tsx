@@ -30,6 +30,7 @@ const ContactPage = () => {
     const [name, setName] = useState('')
     const [selectedGroups, setSelectedGroups] = useState<number[]>([])
     const [formError, setFormError] = useState<string | null>(null)
+    const [createOpen, setCreateOpen] = useState(false)
 
         useEffect(() => {
             const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
@@ -68,22 +69,21 @@ const ContactPage = () => {
         setSelectedGroups(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(g => g !== id))
     }
 
-    const onSubmit = async (e: React.FormEvent) => {
+    const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
         e.preventDefault()
         setFormError(null)
-        if (!name.trim()) {
-            setFormError('Name is required')
-            return
-        }
+        if (!name.trim()) { setFormError('Name is required'); return false }
         try {
             const res = await createContact({ name: name.trim(), groups: selectedGroups }).unwrap()
             setName('')
             setSelectedGroups([])
             toast.success(extractSuccessMessage(res, 'Contact created'))
+            return true
         } catch (e) {
             const msg = extractErrorMessage(e)
             setFormError(msg)
             toast.error(msg)
+            return false
         }
     }
 
@@ -100,34 +100,10 @@ const ContactPage = () => {
                             <Button type="button" size="sm" variant="outline" onClick={() => refetchGroups()}>Retry</Button>
                         </div>
                     )}
-
-                    <form onSubmit={onSubmit} className="grid gap-4 max-w-xl p-4 border rounded-md">
-                <div className="grid gap-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Groups</Label>
-                    <div className="flex flex-wrap gap-3">
-                        {loadingGroups ? (
-                            <span className="text-sm text-muted-foreground">Loading groups…</span>
-                        ) : groups.length ? (
-                            groups.map(g => (
-                                <label key={g.id} className="flex items-center gap-2 text-sm">
-                                    <Checkbox checked={selectedGroups.includes(g.id)} onCheckedChange={(c) => toggleGroup(g.id, Boolean(c))} />
-                                    <span>{g.name}</span>
-                                </label>
-                            ))
-                        ) : (
-                            <span className="text-sm text-muted-foreground">No groups yet</span>
-                        )}
-                    </div>
-                </div>
-                {formError && <div className="text-sm text-red-600">{formError}</div>}
-                <div>
-                    <Button type="submit" disabled={creating}>Create contact</Button>
-                </div>
-            </form>
+            <div className="flex items-center justify-between">
+                <div />
+                <Button size="sm" onClick={() => { setCreateOpen(true); setFormError(null) }}>New Contact</Button>
+            </div>
 
                             <div className="space-y-2">
                         <div className="flex items-center justify-between gap-3">
@@ -196,6 +172,46 @@ const ContactPage = () => {
                                     </div>
                                 )}
             </div>
+
+            {/* Create modal */}
+            {createOpen && (
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
+                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-semibold">New contact</h3>
+                            <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+                        </div>
+                        <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="name">Name</Label>
+                                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Groups</Label>
+                                <div className="flex flex-wrap gap-3">
+                                    {loadingGroups ? (
+                                        <span className="text-sm text-muted-foreground">Loading groups…</span>
+                                    ) : groups.length ? (
+                                        groups.map(g => (
+                                            <label key={g.id} className="flex items-center gap-2 text-sm">
+                                                <Checkbox checked={selectedGroups.includes(g.id)} onCheckedChange={(c) => toggleGroup(g.id, Boolean(c))} />
+                                                <span>{g.name}</span>
+                                            </label>
+                                        ))
+                                    ) : (
+                                        <span className="text-sm text-muted-foreground">No groups yet</span>
+                                    )}
+                                </div>
+                            </div>
+                            {formError && <div className="text-sm text-red-600">{formError}</div>}
+                            <div className="flex items-center justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={creating}>Create</Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* View sheet */}
             {viewingId !== null && (

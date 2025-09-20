@@ -69,6 +69,7 @@ const TransactionsPage = () => {
   const [description, setDescription] = useState('')
   const [returnDate, setReturnDate] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 250)
     return () => clearTimeout(t)
@@ -84,13 +85,13 @@ const TransactionsPage = () => {
   const [editReturnDate, setEditReturnDate] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault()
     setFormError(null)
-    if (!label.trim()) return setFormError('Label is required')
-    if (contact === '') return setFormError('Contact is required')
-    const amt = parseFloat(amount)
-    if (!isFinite(amt) || amt <= 0) return setFormError('Amount must be > 0')
+  if (!label.trim()) { setFormError('Label is required'); return false }
+  if (contact === '') { setFormError('Contact is required'); return false }
+  const amt = parseFloat(amount)
+  if (!isFinite(amt) || amt <= 0) { setFormError('Amount must be > 0'); return false }
     try {
       const res = await createTx({
         label: label.trim(),
@@ -104,10 +105,12 @@ const TransactionsPage = () => {
       setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate('')
       toast.success(extractSuccessMessage(res, 'Transaction created'))
       refetchTx()
+      return true
     } catch (e) {
       const msg = extractErrorMessage(e)
       setFormError(msg)
       toast.error(msg)
+      return false
     }
   }
 
@@ -125,42 +128,10 @@ const TransactionsPage = () => {
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="grid gap-4 max-w-xl p-4 border rounded-md">
-        <div className="grid gap-2">
-          <Label htmlFor="label">Label</Label>
-          <Input id="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Loan to John" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="contact">Contact</Label>
-          <select id="contact" className="h-9 rounded-md border bg-background px-3 text-sm" value={contact} onChange={(e) => setContact(e.target.value ? Number(e.target.value) : '')}>
-            <option value="" disabled>{loadingContacts ? 'Loading…' : 'Select a contact'}</option>
-            {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="type">Type</Label>
-          <select id="type" className="h-9 rounded-md border bg-background px-3 text-sm" value={_type} onChange={(e) => setType(e.target.value as 'credit' | 'debit')}>
-            <option value="credit">Credit</option>
-            <option value="debit">Debit</option>
-          </select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="amount">Amount</Label>
-          <Input id="amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="description">Description</Label>
-          <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="returnDate">Return date (optional)</Label>
-          <Input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-        </div>
-        {formError && <div className="text-sm text-red-600">{formError}</div>}
-        <div>
-          <Button type="submit" disabled={creating}>Create transaction</Button>
-        </div>
-      </form>
+      <div className="flex items-center justify-between">
+        <div />
+        <Button size="sm" onClick={() => { setCreateOpen(true); setFormError(null) }}>New Transaction</Button>
+      </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -223,6 +194,54 @@ const TransactionsPage = () => {
           </div>
         )}
       </div>
+      {/* Create modal */}
+      {createOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
+          <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold">New transaction</h3>
+              <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+            </div>
+            <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="label">Label</Label>
+                <Input id="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Loan to John" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="contact">Contact</Label>
+                <select id="contact" className="h-9 rounded-md border bg-background px-3 text-sm" value={contact} onChange={(e) => setContact(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="" disabled>{loadingContacts ? 'Loading…' : 'Select a contact'}</option>
+                  {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="type">Type</Label>
+                <select id="type" className="h-9 rounded-md border bg-background px-3 text-sm" value={_type} onChange={(e) => setType(e.target.value as 'credit' | 'debit')}>
+                  <option value="credit">Credit</option>
+                  <option value="debit">Debit</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="amount">Amount</Label>
+                <Input id="amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="returnDate">Return date (optional)</Label>
+                <Input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+              </div>
+              {formError && <div className="text-sm text-red-600">{formError}</div>}
+              <div className="flex items-center gap-2 justify-end">
+                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={creating}>Create</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* View modal */}
       {viewingId !== null && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setViewingId(null)}>

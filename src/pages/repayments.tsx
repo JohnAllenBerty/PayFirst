@@ -79,6 +79,7 @@ const RepaymentsPage = () => {
   const [remarks, setRemarks] = useState('')
   const [date, setDate] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const [viewingId, setViewingId] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -89,13 +90,13 @@ const RepaymentsPage = () => {
   const [editDate, setEditDate] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault()
     setFormError(null)
-    if (!label.trim()) return setFormError('Label is required')
-    if (transaction === '') return setFormError('Transaction is required')
-    const amt = parseFloat(amount)
-    if (!isFinite(amt) || amt <= 0) return setFormError('Amount must be > 0')
+  if (!label.trim()) { setFormError('Label is required'); return false }
+  if (transaction === '') { setFormError('Transaction is required'); return false }
+  const amt = parseFloat(amount)
+  if (!isFinite(amt) || amt <= 0) { setFormError('Amount must be > 0'); return false }
     try {
       const res = await createRep({
         label: label.trim(),
@@ -107,10 +108,12 @@ const RepaymentsPage = () => {
       setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate('')
       toast.success(extractSuccessMessage(res, 'Repayment created'))
       refetchRep()
+      return true
     } catch (e) {
       const msg = extractErrorMessage(e)
       setFormError(msg)
       toast.error(msg)
+      return false
     }
   }
 
@@ -130,35 +133,10 @@ const RepaymentsPage = () => {
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="grid gap-4 max-w-xl p-4 border rounded-md">
-        <div className="grid gap-2">
-          <Label htmlFor="label">Label</Label>
-          <Input id="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Repayment 1" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="transaction">Transaction</Label>
-          <select id="transaction" className="h-9 rounded-md border bg-background px-3 text-sm" value={transaction} onChange={(e) => setTransaction(e.target.value ? Number(e.target.value) : '')}>
-            <option value="" disabled>{loadingTx ? 'Loading…' : 'Select a transaction'}</option>
-            {transactions.map((t: Transaction) => <option key={t.id} value={t.id}>{t.label} ({t._type} {t.amount})</option>)}
-          </select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="amount">Amount</Label>
-          <Input id="amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="remarks">Remarks</Label>
-          <Input id="remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional remarks" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="date">Date</Label>
-          <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        {formError && <div className="text-sm text-red-600">{formError}</div>}
-        <div>
-          <Button type="submit" disabled={creating}>Create repayment</Button>
-        </div>
-      </form>
+      <div className="flex items-center justify-between">
+        <div />
+        <Button size="sm" onClick={() => { setCreateOpen(true); setFormError(null) }}>New Repayment</Button>
+      </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -221,6 +199,48 @@ const RepaymentsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Create modal */}
+      {createOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
+          <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold">New repayment</h3>
+              <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+            </div>
+            <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="label">Label</Label>
+                <Input id="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Repayment 1" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="transaction">Transaction</Label>
+                <select id="transaction" className="h-9 rounded-md border bg-background px-3 text-sm" value={transaction} onChange={(e) => setTransaction(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="" disabled>{loadingTx ? 'Loading…' : 'Select a transaction'}</option>
+                  {transactions.map((t: Transaction) => <option key={t.id} value={t.id}>{t.label} ({t._type} {t.amount})</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="amount">Amount</Label>
+                <Input id="amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="remarks">Remarks</Label>
+                <Input id="remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional remarks" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="date">Date</Label>
+                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              {formError && <div className="text-sm text-red-600">{formError}</div>}
+              <div className="flex items-center gap-2 justify-end">
+                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={creating}>Create</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* View modal */}
       {viewingId !== null && (
