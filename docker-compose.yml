@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  backend:
+    image: ghcr.io/your-org/payfirst-backend:latest # replace with actual backend image
+    container_name: payfirst-backend
+    ports:
+      - "8000:8000"
+    # env_file: ./backend/.env  # optional if you have one
+    # networks:
+    #   - payfirst-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payfirst-frontend
+    depends_on:
+      - backend
+    environment:
+      - API_TARGET=http://backend:8000/
+    ports:
+      - "5173:80"
+    # networks:
+    #   - payfirst-net
+
+# networks:
+#   payfirst-net:
+#     driver: bridge

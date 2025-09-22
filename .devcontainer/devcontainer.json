@@ -1,0 +1,32 @@
+{
+  "name": "PayFirst (Frontend)",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "forwardPorts": [5173, 8000],
+  "portsAttributes": {
+    "5173": { "label": "Vite Dev Server", "onAutoForward": "openPreview" },
+    "8000": { "label": "Backend API" }
+  },
+  "containerEnv": {
+    "VITE_API_TARGET": "http://localhost:8000/"
+  },
+  "remoteEnv": {
+    "VITE_API_TARGET": "http://localhost:8000/"
+  },
+  "postCreateCommand": "bash -lc '[ -f .env ] || cp .env.example .env; npm ci'"
+}
