@@ -80,7 +80,7 @@ const ContactGroupList = () => {
     const [ordering, setOrdering] = useState<string>('name')
     const [nameQuery, setNameQuery] = useState('')
     const [filters, setFilters] = useState<{ name?: string }>({})
-    const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering, name: filters.name || undefined })
+    const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering, search: filters.name || undefined })
     const [createGroup, { isLoading: creating }] = useCreateContactGroupMutation()
     const [updateGroup, { isLoading: updating }] = useUpdateContactGroupMutation()
     const [deleteGroup, { isLoading: deleting }] = useDeleteContactGroupMutation()
@@ -90,7 +90,7 @@ const ContactGroupList = () => {
     const [createOpen, setCreateOpen] = useState(false)
     // sortAsc moved above and drives API ordering
     const [page, setPage] = useState(1)
-    const pageSize = 10
+    const [pageSize, setPageSize] = useState(10)
     const [treeView, setTreeView] = useState(true)
     const [viewingId, setViewingId] = useState<number | null>(null)
     const [editingId, setEditingId] = useState<number | null>(null)
@@ -203,7 +203,7 @@ const ContactGroupList = () => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All groups</h2>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-3 text-sm">
                         <div className="relative">
                             <Input
                                 value={nameQuery}
@@ -240,6 +240,22 @@ const ContactGroupList = () => {
                         <Button variant="outline" size="sm" onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')} className="gap-1">
                             {ordering.includes('name') && ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />} Sort
                         </Button>
+                        {!treeView && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-muted-foreground" htmlFor="group-page-size">Rows per page</label>
+                                <select
+                                    id="group-page-size"
+                                    className="h-8 rounded-md border bg-background px-2 text-sm"
+                                    value={pageSize}
+                                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        )}
                         <Button variant={treeView ? 'default' : 'outline'} size="sm" className="gap-1" onClick={() => setTreeView(true)}>
                             <FolderTree className="size-4" /> Tree
                         </Button>
@@ -332,13 +348,16 @@ const ContactGroupList = () => {
                 ) : (
                     <div className="text-sm text-muted-foreground">No groups found</div>
                 )}
-                {!treeView && allGroups.length > pageSize && (
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
-                        <span className="text-xs">Page {page} of {Math.ceil(allGroups.length / pageSize)}</span>
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(Math.ceil(allGroups.length / pageSize), p + 1))} disabled={page >= Math.ceil(allGroups.length / pageSize)}>Next</Button>
-                    </div>
-                )}
+                {(() => {
+                    const totalPages = Math.max(1, Math.ceil(allGroups.length / pageSize))
+                    return !treeView && allGroups.length > 0 ? (
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                            <span className="text-xs">Page {page} of {totalPages}</span>
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</Button>
+                        </div>
+                    ) : null
+                })()}
             </div>
             {/* Create modal */}
             {createOpen && (

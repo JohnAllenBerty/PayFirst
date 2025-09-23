@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const TransactionsPage = () => {
     const [page, setPage] = useState(1)
-    const pageSize = 10
+    const [pageSize, setPageSize] = useState(10)
     const [ordering, setOrdering] = useState<string>('label')
     const [refresh, setRefresh] = useState(0)
     // Column filter input states (query) and applied filters
@@ -19,17 +19,49 @@ const TransactionsPage = () => {
     const [typeQuery, setTypeQuery] = useState<'credit' | 'debit' | ''>('')
     const [contactQuery, setContactQuery] = useState<number | ''>('')
     const [filters, setFilters] = useState<{ label?: string; _type?: 'credit' | 'debit'; contact?: number }>({})
-    const { data: txRes, isLoading: loadingTx, isFetching: fetchingTx } = useListTransactionsQuery({
-        page,
-        page_size: pageSize,
-        ordering,
-        refresh,
-        // Column filters (backend may accept these specific fields)
-        label: filters.label || undefined,
-        _type: filters._type || undefined,
-        contact: typeof filters.contact === 'number' ? filters.contact : undefined,
-    })
+    // Contacts for dropdown and details
     const { data: contactsRes, isLoading: loadingContacts } = useListContactsQuery({ page_size: 1000 })
+
+    // Normalize contacts array once; use this in UI and search
+    const contacts = useMemo(() => {
+        const res = contactsRes as ApiFail | Paginated<Contact> | ApiSuccess<Paginated<Contact> | Contact[]> | undefined
+        if (!res) return [] as Contact[]
+        if ((res as ApiFail).status === false) return [] as Contact[]
+        if ((res as ApiSuccess<Paginated<Contact> | Contact[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<Contact> | Contact[]>
+            const data = ok.data
+            return Array.isArray(data) ? data : (data.results ?? [])
+        }
+        const pg = res as Paginated<Contact>
+        return Array.isArray(pg.results) ? pg.results : []
+    }, [contactsRes])
+
+    // Build backend search param from supported fields (label, contact name). Type is filtered client-side.
+    const searchText = useMemo(() => {
+        const parts: string[] = []
+        if (filters.label) parts.push(filters.label)
+        if (typeof filters.contact === 'number') {
+            const found = contacts.find(c => c.id === filters.contact)
+            if (found?.name) parts.push(found.name)
+        }
+        return parts.join(' ').trim() || undefined
+    }, [filters, contacts])
+
+    // If type filter is active (no backend support), fetch unpaginated for reliable client-side filtering.
+    const listParams = useMemo(() => {
+        const base: Record<string, string | number | boolean | undefined> = {
+            ordering,
+            refresh,
+            search: searchText,
+        }
+        if (!filters._type) {
+            base.page = page
+            base.page_size = pageSize
+        }
+        return base
+    }, [ordering, refresh, searchText, filters._type, page, pageSize])
+
+    const { data: txRes, isLoading: loadingTx, isFetching: fetchingTx } = useListTransactionsQuery(listParams)
     const [createTx, { isLoading: creating }] = useCreateTransactionMutation()
     const [updateTx, { isLoading: updating }] = useUpdateTransactionMutation()
     const [deleteTx, { isLoading: deleting }] = useDeleteTransactionMutation()
@@ -48,21 +80,17 @@ const TransactionsPage = () => {
         if (Array.isArray(pg.results)) return { items: pg.results, total: pg.count }
         return { items: [] as Transaction[], total: 0 }
     }, [txRes])
-    const transactions = txData.items
-    const totalTransactions = txData.total
+    // Apply client-side filters not supported by backend (i.e., _type)
+    const transactions = useMemo(() => {
+        let items = txData.items
+        if (filters._type) items = items.filter((t) => t._type === filters._type)
+        if (typeof filters.contact === 'number') items = items.filter((t) => t.contact === filters.contact)
+        if (filters.label) items = items.filter((t) => t.label.toLowerCase().includes(filters.label!.toLowerCase()))
+        return items
+    }, [txData.items, filters])
+    const totalTransactions = filters._type ? transactions.length : txData.total
 
-    const contacts = useMemo(() => {
-        const res = contactsRes as ApiFail | Paginated<Contact> | ApiSuccess<Paginated<Contact> | Contact[]> | undefined
-        if (!res) return [] as Contact[]
-        if ((res as ApiFail).status === false) return [] as Contact[]
-        if ((res as ApiSuccess<Paginated<Contact> | Contact[]>).status === true) {
-            const ok = res as ApiSuccess<Paginated<Contact> | Contact[]>
-            const data = ok.data
-            return Array.isArray(data) ? data : (data.results ?? [])
-        }
-        const pg = res as Paginated<Contact>
-        return Array.isArray(pg.results) ? pg.results : []
-    }, [contactsRes])
+    // contacts useMemo moved above
 
     const failMessage = (() => {
         const res = txRes as ApiFail | Paginated<Transaction> | ApiSuccess<Paginated<Transaction>> | undefined
@@ -142,6 +170,20 @@ const TransactionsPage = () => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All transactions</h2>
+                    <div className="flex items-center gap-2 text-sm">
+                        <label className="text-muted-foreground" htmlFor="tx-page-size">Rows per page</label>
+                        <select
+                            id="tx-page-size"
+                            className="h-8 rounded-md border bg-background px-2 text-sm"
+                            value={pageSize}
+                            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+                        >
+                            <option value={10}>10</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="rounded-md border overflow-hidden">
                     <Table>
@@ -236,7 +278,7 @@ const TransactionsPage = () => {
                                     </TableRow>
                                 ))
                             ) : filteredTx.length ? (
-                                filteredTx.map((t: Transaction) => (
+                                (filters._type ? filteredTx.slice((page - 1) * pageSize, page * pageSize) : filteredTx).map((t: Transaction) => (
                                     <TableRow key={t.id}>
                                         <TableCell className="font-medium">{t.label}</TableCell>
                                         <TableCell className="uppercase">{t._type}</TableCell>
@@ -262,13 +304,16 @@ const TransactionsPage = () => {
                         </TableBody>
                     </Table>
                 </div>
-                {totalTransactions > pageSize && (
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
-                        <span className="text-xs">Page {page} of {Math.ceil(totalTransactions / pageSize)}</span>
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(Math.ceil(totalTransactions / pageSize), p + 1))} disabled={page >= Math.ceil(totalTransactions / pageSize)}>Next</Button>
-                    </div>
-                )}
+                {(() => {
+                    const totalPages = Math.max(1, Math.ceil(totalTransactions / pageSize))
+                    return totalTransactions > 0 ? (
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                            <span className="text-xs">Page {page} of {totalPages}</span>
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</Button>
+                        </div>
+                    ) : null
+                })()}
             </div>
             {/* Create modal */}
             {createOpen && (

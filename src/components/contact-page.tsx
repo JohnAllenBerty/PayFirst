@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const ContactPage = () => {
     const [ordering, setOrdering] = useState<string>('name')
     const [page, setPage] = useState(1)
-    const pageSize = 10
+    const [pageSize, setPageSize] = useState(10)
     const [treeView, setTreeView] = useState(false)
     const [query, setQuery] = useState('')
     const [filters, setFilters] = useState<{ name: string }>({ name: '' })
@@ -23,8 +23,8 @@ const ContactPage = () => {
         page: treeView ? 1 : page,
         page_size: treeView ? 1000 : pageSize,
         ordering,
-        // Column filters (backend should support these params or ignore unknowns)
-        name: filters.name || undefined,
+        // Map to DRF SearchFilter 'search' across name and group name
+        search: filters.name || undefined,
         refresh, // noop param to force refetch on demand
     })
     const { data: groupsRes, isLoading: loadingGroups, refetch: refetchGroups } = useListContactGroupsQuery()
@@ -46,11 +46,13 @@ const ContactPage = () => {
 
     const groups = useMemo(() => (groupsRes && typeof groupsRes !== 'string' && (groupsRes as ApiSuccess<ContactGroup[]>)?.status ? (groupsRes as ApiSuccess<ContactGroup[]>)?.data : []), [groupsRes])
     const contactsData = useMemo(() => {
-        const res = contactsRes as ApiFail | Paginated<Contact> | ApiSuccess<Paginated<Contact>> | undefined
+        const res = contactsRes as ApiFail | Paginated<Contact> | ApiSuccess<Paginated<Contact> | Contact[]> | undefined
         if (!res) return { items: [] as Contact[], total: 0 }
-        if ((res as ApiSuccess<Paginated<Contact>>).status === true) {
-            const ok = res as ApiSuccess<Paginated<Contact>>
-            return { items: ok.data.results, total: ok.data.count }
+        if ((res as ApiSuccess<Paginated<Contact> | Contact[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<Contact> | Contact[]>
+            const data = ok.data
+            if (Array.isArray(data)) return { items: data, total: data.length }
+            return { items: data.results ?? [], total: data.count ?? (data.results ? data.results.length : 0) }
         }
         if ((res as ApiFail).status === false) return { items: [] as Contact[], total: 0 }
         const pg = res as Paginated<Contact>
@@ -219,7 +221,23 @@ const ContactPage = () => {
             <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium">All contacts</h2>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-3 text-sm">
+                        {!treeView && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-muted-foreground" htmlFor="contact-page-size">Rows per page</label>
+                                <select
+                                    id="contact-page-size"
+                                    className="h-8 rounded-md border bg-background px-2 text-sm"
+                                    value={pageSize}
+                                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        )}
                         <Button variant={treeView ? 'default' : 'outline'} size="sm" className="gap-1" onClick={() => { setTreeView(true); setPage(1) }}>
                             <FolderTree className="size-4" /> Tree
                         </Button>
@@ -402,13 +420,16 @@ const ContactPage = () => {
                     </ul>
                 </div>
                 )}
-                {totalContacts > pageSize && (
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
-                        <span className="text-xs">Page {page} of {Math.ceil(totalContacts / pageSize)}</span>
-                        <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(Math.ceil(totalContacts / pageSize), p + 1))} disabled={page >= Math.ceil(totalContacts / pageSize)}>Next</Button>
-                    </div>
-                )}
+                {(() => {
+                    const totalPages = Math.max(1, Math.ceil(totalContacts / pageSize))
+                    return !treeView && totalContacts > 0 ? (
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                            <span className="text-xs">Page {page} of {totalPages}</span>
+                            <Button size="sm" variant="outline" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Next</Button>
+                        </div>
+                    ) : null
+                })()}
             </div>
             {/* TreeGroupNode component defined above is used in tree view */}
 

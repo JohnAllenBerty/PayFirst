@@ -88,18 +88,28 @@ const baseQuery = fetchBaseQuery({
         if (response.status === 500) {
             handle500Response();
         }
-        if (response.headers.get('Content-Type')?.includes('application/pdf')) {
-            const contentDisposition = response.headers.get('Content-Disposition');
-            const filename = contentDisposition?.split('filename=')[1].split(';')[0].replace(/"/g, '');
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            return { url: blobUrl, filename: filename };
-        } else if (response.headers.get('Content-Type')?.includes('application/json')) {
-            return response.json();
-        } else if (response.headers.get('Content-Type')?.includes('text/html; charset=UTF-8')) {
-            return response.text();
+        const ct = response.headers.get('Content-Type') || '';
+        try {
+            if (ct.includes('application/pdf')) {
+                const contentDisposition = response.headers.get('Content-Disposition');
+                const filename = contentDisposition?.split('filename=')[1]?.split(';')[0]?.replace(/"/g, '');
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                return { url: blobUrl, filename: filename };
+            }
+            if (ct.includes('application/json')) {
+                return await response.json();
+            }
+            if (ct.startsWith('text/')) {
+                return await response.text();
+            }
+            // Fallback: try text, then provide minimal info; never return the raw Response
+            try { return await response.text(); } catch { /* noop */ }
+            return { status: response.status, statusText: response.statusText, url: response.url };
+        } catch {
+            // If parsing fails, still return minimal serializable info
+            return { status: response.status, statusText: response.statusText, url: response.url };
         }
-        return response;
     },
 });
 
@@ -110,9 +120,21 @@ const customBaseQuery = async (
 ) => {
     const result = await baseQuery(args, api, extraOptions as Record<string, unknown>);
 
-    // Transform the data to ensure it is serializable
-    if (result.data) {
-        result.data = JSON.parse(JSON.stringify(result.data));
+    // Ensure both data and error are serializable
+    if (result.data !== undefined) {
+        try { result.data = JSON.parse(JSON.stringify(result.data)); } catch { /* ignore */ }
+    }
+    if (result.error && typeof result.error === 'object') {
+        const errObj = result.error as { data?: unknown; error?: unknown };
+        if (errObj.data instanceof Response) {
+            const r: Response = errObj.data;
+            errObj.data = { status: r.status, statusText: r.statusText, url: r.url };
+        } else if (errObj.data !== undefined) {
+            try { errObj.data = JSON.parse(JSON.stringify(errObj.data)); } catch { /* ignore */ }
+        }
+        if (errObj.error && typeof errObj.error === 'object') {
+            try { errObj.error = JSON.parse(JSON.stringify(errObj.error)); } catch { /* ignore */ }
+        }
     }
 
     return result;
@@ -259,7 +281,10 @@ export const payFirstApi = createApi({
         }),
 
         // Contacts
-        listContacts: builder.query<ApiSuccess<Paginated<Contact>> | Paginated<Contact> | ApiFail, ListParams | void>({
+        listContacts: builder.query<
+            ApiSuccess<Paginated<Contact> | Contact[]> | Paginated<Contact> | ApiFail,
+            ListParams | void
+        >({
             query: (params) => params ? ({ url: "/user/contact/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/contact/" }),
             providesTags: ["Contacts"],
         }),
@@ -283,7 +308,10 @@ export const payFirstApi = createApi({
         }),
 
         // Transactions
-        listTransactions: builder.query<ApiSuccess<Paginated<Transaction>> | Paginated<Transaction> | ApiFail, ListParams | void>({
+        listTransactions: builder.query<
+            ApiSuccess<Paginated<Transaction> | Transaction[]> | Paginated<Transaction> | ApiFail,
+            ListParams | void
+        >({
             query: (params) => params ? ({ url: "/user/transaction/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/transaction/" }),
             providesTags: ["Transactions"],
         }),
@@ -307,7 +335,10 @@ export const payFirstApi = createApi({
         }),
 
         // Repayments
-        listRepayments: builder.query<ApiSuccess<Paginated<Repayment>> | Paginated<Repayment> | ApiFail, ListParams | void>({
+        listRepayments: builder.query<
+            ApiSuccess<Paginated<Repayment> | Repayment[]> | Paginated<Repayment> | ApiFail,
+            ListParams | void
+        >({
             query: (params) => params ? ({ url: "/user/repayment/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/repayment/" }),
             providesTags: ["Repayments"],
         }),
