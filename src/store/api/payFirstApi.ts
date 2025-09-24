@@ -21,6 +21,7 @@ export type ContactGroup = {
     subgroups?: ContactGroup[];
 };
 export type Contact = { id: number; name: string; owner: number; groups: number[]; data: Record<string, unknown> };
+export type PaymentMethod = { id: number; label: string; is_default: boolean; is_common: boolean; owner?: number };
 export type Transaction = {
     id: number;
     label: string;
@@ -30,6 +31,7 @@ export type Transaction = {
     description: string;
     return_date?: string | null;
     date: string;
+    payment_method?: number | null;
     pending_amount: number;
     repayments: Array<{ id: number; label: string; amount: number; remarks: string; date: string }>;
 };
@@ -40,6 +42,7 @@ export type Repayment = {
     amount: number;
     remarks: string;
     date: string;
+    payment_method?: number | null;
 };
 
 // DRF-style pagination shape
@@ -150,6 +153,7 @@ export const payFirstApi = createApi({
         "Contacts",
         "Transactions",
         "Repayments",
+        "PaymentMethods",
     ],
     endpoints: (builder) => ({
         // Auth
@@ -360,6 +364,15 @@ export const payFirstApi = createApi({
             invalidatesTags: ["Repayments", "Transactions"],
             // Rely on invalidation to refresh
         }),
+
+        // Payment Methods (read-only for selection in forms)
+        listPaymentMethods: builder.query<
+            ApiSuccess<Paginated<PaymentMethod> | PaymentMethod[]> | Paginated<PaymentMethod> | ApiFail,
+            ListParams | void
+        >({
+            query: (params) => params ? ({ url: "/user/payment_method/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/payment_method/" }),
+            providesTags: ["PaymentMethods"],
+        }),
     }),
 });
 
@@ -390,4 +403,5 @@ export const {
     useGetRepaymentQuery,
     useUpdateRepaymentMutation,
     useDeleteRepaymentMutation,
+    useListPaymentMethodsQuery,
 } = payFirstApi;

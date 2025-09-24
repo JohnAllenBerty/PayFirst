@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact } from '@/store/api/payFirstApi'
+import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, useListPaymentMethodsQuery, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact, type PaymentMethod } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,21 @@ const TransactionsPage = () => {
     const [filters, setFilters] = useState<{ label?: string; _type?: 'credit' | 'debit'; contact?: number }>({})
     // Contacts for dropdown and details
     const { data: contactsRes, isLoading: loadingContacts } = useListContactsQuery({ page_size: 1000 })
+
+    // Payment methods for optional selection
+    const { data: pmRes, isLoading: loadingPM } = useListPaymentMethodsQuery({ page_size: 1000 })
+    const paymentMethods = useMemo(() => {
+        const res = pmRes as ApiFail | Paginated<PaymentMethod> | ApiSuccess<Paginated<PaymentMethod> | PaymentMethod[]> | undefined
+        if (!res) return [] as PaymentMethod[]
+        if ((res as ApiFail).status === false) return [] as PaymentMethod[]
+        if ((res as ApiSuccess<Paginated<PaymentMethod> | PaymentMethod[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<PaymentMethod> | PaymentMethod[]>
+            const data = ok.data
+            return Array.isArray(data) ? data : (data.results ?? [])
+        }
+        const pg = res as Paginated<PaymentMethod>
+        return Array.isArray(pg.results) ? pg.results : []
+    }, [pmRes])
 
     // Normalize contacts array once; use this in UI and search
     const contacts = useMemo(() => {
@@ -107,6 +122,7 @@ const TransactionsPage = () => {
     const [returnDate, setReturnDate] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
+    const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
     // No debounce; filters apply only on Enter/Apply
 
     const filteredTx = transactions // server handles filtering and sorting
@@ -135,8 +151,9 @@ const TransactionsPage = () => {
                 description: description.trim(),
                 return_date: returnDate || null,
                 date: new Date().toISOString().slice(0, 10),
+                    payment_method: paymentMethod === '' ? null : Number(paymentMethod),
             }).unwrap()
-            setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate('')
+                setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate(''); setPaymentMethod('')
             toast.success(extractSuccessMessage(res, 'Transaction created'))
             setRefresh((c) => c + 1)
             return true
@@ -147,6 +164,7 @@ const TransactionsPage = () => {
             return false
         }
     }
+    const [editPaymentMethod, setEditPaymentMethod] = useState<number | ''>('')
 
     return (
         <div className="space-y-6">
@@ -290,7 +308,7 @@ const TransactionsPage = () => {
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(t.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); setEditPaymentMethod(typeof t.payment_method === 'number' ? t.payment_method : ''); }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(t.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -354,6 +372,13 @@ const TransactionsPage = () => {
                                 <Label htmlFor="returnDate">Return date (optional)</Label>
                                 <Input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
                             </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="payment-method">Payment method (optional)</Label>
+                                <select id="payment-method" className="h-9 rounded-md border bg-background px-3 text-sm" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">{loadingPM ? 'Loading…' : 'None'}</option>
+                                    {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
+                                </select>
+                            </div>
                             {formError && <div className="text-sm text-red-600">{formError}</div>}
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -385,6 +410,7 @@ const TransactionsPage = () => {
                                     <div><span className="text-muted-foreground">Date:</span> {tx.date}</div>
                                     <div><span className="text-muted-foreground">Return date:</span> {tx.return_date || '—'}</div>
                                     <div><span className="text-muted-foreground">Description:</span> {tx.description || '—'}</div>
+                                    <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (tx.payment_method ?? -1))?.label || '—'}</div>
                                 </div>
                             )
                         })()}
@@ -405,7 +431,7 @@ const TransactionsPage = () => {
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null } }).unwrap()
+                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod) } }).unwrap()
                                 toast.success('Transaction updated')
                                 setEditingId(null)
                             } catch (e) {
@@ -434,6 +460,13 @@ const TransactionsPage = () => {
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-return-date">Return date</Label>
                                 <Input id="edit-return-date" type="date" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-payment-method">Payment method (optional)</Label>
+                                <select id="edit-payment-method" className="h-9 rounded-md border bg-background px-3 text-sm" value={editPaymentMethod} onChange={(e) => setEditPaymentMethod(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">None</option>
+                                    {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
+                                </select>
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>

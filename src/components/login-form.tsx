@@ -27,9 +27,9 @@ export function LoginForm({
     const nextErrors: { email?: string; password?: string } = {}
 
     if (!email) {
-      nextErrors.email = 'Email is required'
+      nextErrors.email = 'Email address is required'
     } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-      nextErrors.email = 'Please enter a valid email'
+      nextErrors.email = 'Please enter a valid email address'
     }
 
     if (!password) {
@@ -42,7 +42,7 @@ export function LoginForm({
     if (Object.keys(nextErrors).length) return
 
     if (!errors.email && !errors.password) {
-      login({ username: email, password, remember })
+  login({ username: email, password, remember })
         .unwrap()
         .then((res) => {
           // Only navigate after a successful response with a token
@@ -63,16 +63,16 @@ export function LoginForm({
       <div className="flex flex-col items-center gap-2 text-center">
         <h1 className="text-2xl font-bold">Login to your account</h1>
         <p className="text-muted-foreground text-sm text-balance">
-          Enter your email below to login to your account
+          Enter your email address below to login to your account
         </p>
       </div>
       <div className="grid gap-6">
         <div className="grid gap-3">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email address</Label>
           <Input
             id="email"
             type="email"
-            placeholder="m@example.com"
+            placeholder="you@email.com"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}

@@ -34,6 +34,7 @@ const ContactPage = () => {
 
     const [name, setName] = useState('')
     const [selectedGroups, setSelectedGroups] = useState<number[]>([])
+    const [dataField, setDataField] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
 
@@ -77,10 +78,20 @@ const ContactPage = () => {
         e.preventDefault()
         setFormError(null)
         if (!name.trim()) { setFormError('Name is required'); return false }
+        let parsedData: Record<string, unknown> = {}
+        if (dataField.trim()) {
+            try {
+                parsedData = JSON.parse(dataField)
+            } catch {
+                setFormError('Data must be valid JSON')
+                return false
+            }
+        }
         try {
-            const res = await createContact({ name: name.trim(), groups: selectedGroups }).unwrap()
+            const res = await createContact({ name: name.trim(), groups: selectedGroups, data: parsedData }).unwrap()
             setName('')
             setSelectedGroups([])
+            setDataField('')
             toast.success(extractSuccessMessage(res, 'Contact created'))
             return true
         } catch (e) {
@@ -447,6 +458,17 @@ const ContactPage = () => {
                                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
                             </div>
                             <div className="grid gap-2">
+                                <Label htmlFor="data">Data (JSON)</Label>
+                                <textarea
+                                    id="data"
+                                    className="min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+                                    placeholder='{"phone": "123-456-7890"}'
+                                    value={dataField}
+                                    onChange={e => setDataField(e.target.value)}
+                                />
+                                <span className="text-xs text-muted-foreground">Optional. Must be valid JSON.</span>
+                            </div>
+                            <div className="grid gap-2">
                                 <Label>Groups</Label>
                                 <div className="flex flex-wrap gap-3">
                                     {loadingGroups ? (
@@ -512,9 +534,18 @@ const ContactPage = () => {
                             className="grid gap-3"
                             onSubmit={async (e) => {
                                 e.preventDefault()
+                                let parsedData: Record<string, unknown> = {}
+                                if (dataField.trim()) {
+                                    try {
+                                        parsedData = JSON.parse(dataField)
+                                    } catch {
+                                        toast.error('Data must be valid JSON')
+                                        return
+                                    }
+                                }
                                 try {
                                     const id = editingId!
-                                    const res = await updateContact({ id, changes: { name: editName.trim(), groups: editGroups } }).unwrap()
+                                    const res = await updateContact({ id, changes: { name: editName.trim(), groups: editGroups, data: parsedData } }).unwrap()
                                     toast.success(extractSuccessMessage(res, 'Contact updated'))
                                     setEditingId(null)
                                 } catch (e) {
@@ -536,6 +567,17 @@ const ContactPage = () => {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-data">Data (JSON)</Label>
+                                <textarea
+                                    id="edit-data"
+                                    className="min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+                                    placeholder='{"phone": "123-456-7890"}'
+                                    value={dataField}
+                                    onChange={e => setDataField(e.target.value)}
+                                />
+                                <span className="text-xs text-muted-foreground">Optional. Must be valid JSON.</span>
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
