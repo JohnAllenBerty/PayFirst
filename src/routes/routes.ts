@@ -6,6 +6,7 @@ const ContactGroupList = lazy(() => import("@/components/contact-group-list"))
 const ContactPage = lazy(() => import("@/components/contact-page"))
 const TransactionsPage = lazy(() => import("@/pages/transactions"))
 const RepaymentsPage = lazy(() => import("@/pages/repayments"))
+const PaymentMethodsPage = lazy(() => import("@/pages/payment-methods"))
 const ProfilePage = lazy(() => import("@/pages/profile"))
 const ChangePasswordPage = lazy(() => import("@/pages/change-password"))
 
@@ -29,6 +30,10 @@ export const childrenRoutes: RouteObject[] = [
     {
         path: "/repayments",
         element: React.createElement(RepaymentsPage)
+    },
+    {
+        path: "/payment-methods",
+        element: React.createElement(PaymentMethodsPage)
     },
     {
         path: "/profile",

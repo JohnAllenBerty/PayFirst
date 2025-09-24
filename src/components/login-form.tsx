@@ -27,9 +27,7 @@ export function LoginForm({
     const nextErrors: { email?: string; password?: string } = {}
 
     if (!email) {
-      nextErrors.email = 'Email address is required'
-    } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-      nextErrors.email = 'Please enter a valid email address'
+      nextErrors.email = 'Email or username is required'
     }
 
     if (!password) {
@@ -68,11 +66,11 @@ export function LoginForm({
       </div>
       <div className="grid gap-6">
         <div className="grid gap-3">
-          <Label htmlFor="email">Email address</Label>
+          <Label htmlFor="email">Email or username</Label>
           <Input
             id="email"
-            type="email"
-            placeholder="you@email.com"
+            type="text"
+            placeholder="you@email.com or username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}

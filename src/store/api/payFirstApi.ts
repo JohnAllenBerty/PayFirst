@@ -64,9 +64,13 @@ export type ListParams = {
 } & Record<string, string | number | boolean | undefined>;
 
 async function handle401Response() {
-    // Redirect to login on unauthorized
+    // Redirect to login on unauthorized, but avoid bouncing when already on login/sign-up routes
     if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        const path = window.location.pathname || ''
+        const onAuthRoute = path.startsWith('/login') || path.startsWith('/sign-up')
+        if (!onAuthRoute) {
+            window.location.href = '/login'
+        }
     }
 }
 
@@ -79,7 +83,12 @@ async function handle500Response() {
 
 const baseQuery = fetchBaseQuery({
     baseUrl: '/api', // Vite proxy -> Django at http://localhost:8000
-    prepareHeaders: (headers) => {
+    prepareHeaders: (headers, api) => {
+        // Do not send Authorization for public auth endpoints
+        const endpoint = (api as unknown as { endpoint?: string }).endpoint
+        if (endpoint === 'login' || endpoint === 'signUp') {
+            return headers
+        }
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
         if (token) headers.set("Authorization", `Token ${token}`);
         return headers;
@@ -373,6 +382,24 @@ export const payFirstApi = createApi({
             query: (params) => params ? ({ url: "/user/payment_method/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/payment_method/" }),
             providesTags: ["PaymentMethods"],
         }),
+        createPaymentMethod: builder.mutation<ApiSuccess<PaymentMethod> | ApiFail, { label: string; is_default?: boolean; is_common?: boolean }>(
+            {
+                query: (body) => ({ url: "/user/payment_method/", method: "POST", body }),
+                invalidatesTags: ["PaymentMethods"],
+            }
+        ),
+        updatePaymentMethod: builder.mutation<ApiSuccess<PaymentMethod> | ApiFail, { id: number; changes: Partial<Omit<PaymentMethod, 'id'>> }>(
+            {
+                query: ({ id, changes }) => ({ url: `/user/payment_method/${id}/`, method: "PATCH", body: changes }),
+                invalidatesTags: ["PaymentMethods"],
+            }
+        ),
+        deletePaymentMethod: builder.mutation<ApiSuccess<unknown> | ApiFail, number>(
+            {
+                query: (id) => ({ url: `/user/payment_method/${id}/`, method: "DELETE" }),
+                invalidatesTags: ["PaymentMethods"],
+            }
+        ),
     }),
 });
 
@@ -404,4 +431,7 @@ export const {
     useUpdateRepaymentMutation,
     useDeleteRepaymentMutation,
     useListPaymentMethodsQuery,
+    useCreatePaymentMethodMutation,
+    useUpdatePaymentMethodMutation,
+    useDeletePaymentMethodMutation,
 } = payFirstApi;

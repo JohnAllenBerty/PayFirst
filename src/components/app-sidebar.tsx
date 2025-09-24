@@ -61,6 +61,10 @@ const data = {
           title: "Repayments",
           url: "/repayments",
         },
+        {
+          title: "Payment Methods",
+          url: "/payment-methods",
+        },
       ],
     },
     {
