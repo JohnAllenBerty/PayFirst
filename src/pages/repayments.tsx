@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Search, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
-import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction, type PaymentMethod } from '@/store/api/payFirstApi'
-import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation, useListPaymentMethodsQuery } from '@/store/api/payFirstApi'
+import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction, type PaymentMethod, type PaymentSource } from '@/store/api/payFirstApi'
+import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation, useListPaymentMethodsQuery, useListPaymentSourcesQuery } from '@/store/api/payFirstApi'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
@@ -22,6 +22,7 @@ const RepaymentsPage = () => {
 
     const { data: txRes, isLoading: loadingTx } = useListTransactionsQuery({ page_size: 1000 })
     const { data: pmRes, isLoading: loadingPM } = useListPaymentMethodsQuery({ page_size: 1000 })
+    const { data: psRes, isLoading: loadingPS } = useListPaymentSourcesQuery({ page_size: 1000 })
 
     // Normalize transactions array once; use this in UI and search
     const transactions = useMemo(() => {
@@ -52,6 +53,20 @@ const RepaymentsPage = () => {
         const pg = res as Paginated<PaymentMethod>
         return Array.isArray(pg.results) ? pg.results : []
     }, [pmRes])
+    const paymentSources = useMemo(() => {
+        const res = psRes as ApiFail | Paginated<PaymentSource> | ApiSuccess<Paginated<PaymentSource> | PaymentSource[]> | undefined
+        if (!res) return [] as PaymentSource[]
+        if ((res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>
+            const d = ok.data as unknown
+            if (Array.isArray(d)) return d
+            const pg = d as Paginated<PaymentSource>
+            return Array.isArray(pg.results) ? pg.results : []
+        }
+        if ((res as ApiFail).status === false) return [] as PaymentSource[]
+        const pg = res as Paginated<PaymentSource>
+        return Array.isArray(pg.results) ? pg.results : []
+    }, [psRes])
 
     const searchText = useMemo(() => {
         const parts: string[] = []
@@ -110,6 +125,8 @@ const RepaymentsPage = () => {
     const [remarks, setRemarks] = useState('')
     const [date, setDate] = useState('')
     const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
+    const [paymentSource, setPaymentSource] = useState<number | ''>('')
+    const [transactionReference, setTransactionReference] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
 
@@ -121,6 +138,8 @@ const RepaymentsPage = () => {
     const [editRemarks, setEditRemarks] = useState('')
     const [editDate, setEditDate] = useState('')
     const [editPaymentMethod, setEditPaymentMethod] = useState<number | ''>('')
+    const [editPaymentSource, setEditPaymentSource] = useState<number | ''>('')
+    const [editTransactionReference, setEditTransactionReference] = useState('')
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
     const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -138,8 +157,10 @@ const RepaymentsPage = () => {
                 remarks: remarks.trim(),
                 date: date || new Date().toISOString().slice(0, 10),
                 payment_method: paymentMethod === '' ? null : Number(paymentMethod),
+                payment_source: paymentSource === '' ? null : Number(paymentSource),
+                transaction_reference: transactionReference.trim() || null,
             }).unwrap()
-            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(''); setPaymentMethod('')
+            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(''); setPaymentMethod(''); setPaymentSource(''); setTransactionReference('')
             toast.success(extractSuccessMessage(res, 'Repayment created'))
             setRefresh((c) => c + 1)
             return true
@@ -280,7 +301,17 @@ const RepaymentsPage = () => {
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(r.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { 
+                                                    setEditingId(r.id); 
+                                                    setEditLabel(r.label); 
+                                                    setEditTransaction(r.transaction); 
+                                                    setEditAmount(String(r.amount)); 
+                                                    setEditRemarks(r.remarks || ''); 
+                                                    setEditDate(r.date); 
+                                                    setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); 
+                                                    setEditPaymentSource(typeof r.payment_source === 'number' ? r.payment_source : ''); 
+                                                    setEditTransactionReference(r.transaction_reference || ''); 
+                                                }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(r.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -345,6 +376,17 @@ const RepaymentsPage = () => {
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
                             </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="payment-source">Payment source (optional)</Label>
+                                <select id="payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={paymentSource} onChange={(e) => setPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">{loadingPS ? 'Loading…' : 'None'}</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="transaction-reference">Transaction reference (optional)</Label>
+                                <Input id="transaction-reference" value={transactionReference} onChange={(e) => setTransactionReference(e.target.value)} placeholder="e.g., check number, transfer ID" />
+                            </div>
                             {formError && <div className="text-sm text-red-600">{formError}</div>}
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -375,6 +417,8 @@ const RepaymentsPage = () => {
                                     <div><span className="text-muted-foreground">Date:</span> {rep.date}</div>
                                     <div><span className="text-muted-foreground">Remarks:</span> {rep.remarks || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (rep.payment_method ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Payment source:</span> {paymentSources.find(ps => ps.id === (rep.payment_source ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Transaction reference:</span> {rep.transaction_reference || '—'}</div>
                                 </div>
                             )
                         })()}
@@ -395,7 +439,19 @@ const RepaymentsPage = () => {
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                const res = await updateRep({ id, changes: { label: editLabel.trim(), transaction: editTransaction as number, amount: amt, remarks: editRemarks.trim(), date: editDate, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod) } }).unwrap()
+                                const res = await updateRep({ 
+                                    id, 
+                                    changes: { 
+                                        label: editLabel.trim(), 
+                                        transaction: editTransaction as number, 
+                                        amount: amt, 
+                                        remarks: editRemarks.trim(), 
+                                        date: editDate, 
+                                        payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod),
+                                        payment_source: editPaymentSource === '' ? null : Number(editPaymentSource),
+                                        transaction_reference: editTransactionReference.trim() || null,
+                                    } 
+                                }).unwrap()
                                 toast.success(extractSuccessMessage(res, 'Repayment updated'))
                                 setEditingId(null)
                             } catch (e) {
@@ -432,6 +488,17 @@ const RepaymentsPage = () => {
                                     <option value="">None</option>
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-payment-source">Payment source (optional)</Label>
+                                <select id="edit-payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={editPaymentSource} onChange={(e) => setEditPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">None</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-transaction-reference">Transaction reference (optional)</Label>
+                                <Input id="edit-transaction-reference" value={editTransactionReference} onChange={(e) => setEditTransactionReference(e.target.value)} placeholder="e.g., check number, transfer ID" />
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
