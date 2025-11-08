@@ -1,5 +1,7 @@
 import ErrorPage from '@/pages/error-page';
 import LoginPage from '@/pages/login-page';
+import ForgotPasswordPage from '@/pages/forgot-password-page';
+import ResetPasswordPage from '@/pages/reset-password-page';
 import RootLayout from '@/pages/root-layout';
 import SignUpPage from '@/pages/sign-up-page';
 import { childrenRoutes } from '@/routes/routes';
@@ -24,6 +26,8 @@ const router = createBrowserRouter([
   },
   { path: '/login', element: <LoginPage /> },
   { path: '/sign-up', element: <SignUpPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
 ]);
 
 export default function App() {

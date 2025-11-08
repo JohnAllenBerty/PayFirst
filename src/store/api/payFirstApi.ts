@@ -22,6 +22,8 @@ export type ContactGroup = {
 };
 export type Contact = { id: number; name: string; owner: number; groups: number[]; data: Record<string, unknown> };
 export type PaymentMethod = { id: number; label: string; is_default: boolean; is_common: boolean; owner?: number };
+export type PaymentSource = { id: number; label: string; owner?: number };
+export type ModuleInfo = { id: number; name: string; name_plural?: string | null; description: string; is_active: boolean };
 export type Transaction = {
     id: number;
     label: string;
@@ -32,6 +34,8 @@ export type Transaction = {
     return_date?: string | null;
     date: string;
     payment_method?: number | null;
+    transaction_reference?: string | null;
+    payment_source?: number | null;
     pending_amount: number;
     repayments: Array<{ id: number; label: string; amount: number; remarks: string; date: string }>;
 };
@@ -43,6 +47,8 @@ export type Repayment = {
     remarks: string;
     date: string;
     payment_method?: number | null;
+    transaction_reference?: string | null;
+    payment_source?: number | null;
 };
 
 // DRF-style pagination shape
@@ -86,7 +92,7 @@ const baseQuery = fetchBaseQuery({
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint
-        if (endpoint === 'login' || endpoint === 'signUp') {
+        if (endpoint === 'login' || endpoint === 'signUp' || endpoint === 'forgotPassword' || endpoint === 'resetPassword' || endpoint === 'meta') {
             return headers
         }
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -163,6 +169,8 @@ export const payFirstApi = createApi({
         "Transactions",
         "Repayments",
         "PaymentMethods",
+        "PaymentSources",
+        "Meta",
     ],
     endpoints: (builder) => ({
         // Auth
@@ -200,6 +208,16 @@ export const payFirstApi = createApi({
         }),
         changePassword: builder.mutation<unknown, { password: string; new_password: string }>({
             query: (body) => ({ url: "/change_password", method: "POST", body }),
+        }),
+        forgotPassword: builder.mutation<unknown, { email: string }>({
+            query: (body) => ({ url: "/forgot_password", method: "POST", body }),
+        }),
+        resetPassword: builder.mutation<unknown, { _id: string; token: string; new_password: string }>({
+            query: (body) => ({ url: "/reset_password", method: "POST", body }),
+        }),
+        meta: builder.query<ApiSuccess<ModuleInfo[]> | ApiFail | ModuleInfo[], void>({
+            query: () => ({ url: "/meta" }),
+            providesTags: ["Meta"],
         }),
         profile: builder.query<ApiSuccess<Profile> | ApiFail, void>({
             query: () => ({ url: "/profile" }),
@@ -400,6 +418,33 @@ export const payFirstApi = createApi({
                 invalidatesTags: ["PaymentMethods"],
             }
         ),
+
+        // Payment Sources
+        listPaymentSources: builder.query<
+            ApiSuccess<Paginated<PaymentSource> | PaymentSource[]> | Paginated<PaymentSource> | ApiFail,
+            ListParams | void
+        >({
+            query: (params) => params ? ({ url: "/user/payment_source/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/payment_source/" }),
+            providesTags: ["PaymentSources"],
+        }),
+        createPaymentSource: builder.mutation<ApiSuccess<PaymentSource> | ApiFail, { label: string }>(
+            {
+                query: (body) => ({ url: "/user/payment_source/", method: "POST", body }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
+        updatePaymentSource: builder.mutation<ApiSuccess<PaymentSource> | ApiFail, { id: number; changes: Partial<Omit<PaymentSource, 'id'>> }>(
+            {
+                query: ({ id, changes }) => ({ url: `/user/payment_source/${id}/`, method: "PATCH", body: changes }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
+        deletePaymentSource: builder.mutation<ApiSuccess<unknown> | ApiFail, number>(
+            {
+                query: (id) => ({ url: `/user/payment_source/${id}/`, method: "DELETE" }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
     }),
 });
 
@@ -434,4 +479,11 @@ export const {
     useCreatePaymentMethodMutation,
     useUpdatePaymentMethodMutation,
     useDeletePaymentMethodMutation,
+    useListPaymentSourcesQuery,
+    useCreatePaymentSourceMutation,
+    useUpdatePaymentSourceMutation,
+    useDeletePaymentSourceMutation,
+    useForgotPasswordMutation,
+    useResetPasswordMutation,
+    useMetaQuery,
 } = payFirstApi;

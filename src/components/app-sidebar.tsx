@@ -65,6 +65,10 @@ const data = {
           title: "Payment Methods",
           url: "/payment-methods",
         },
+        {
+          title: "Payment Sources",
+          url: "/payment-sources",
+        },
       ],
     },
     {
