@@ -99,7 +99,7 @@ const API_BASE = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const env = (import.meta as any)?.env || {};
-        const raw = env.VITE_API_BASE || env.VITE_API_TARGET;
+        const raw = env.VITE_BASE || env.VITE_API_TARGET;
         if (typeof raw === 'string' && raw.length > 0) {
             return String(raw).replace(/\/+$/, '');
         }
