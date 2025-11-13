@@ -34,7 +34,7 @@ const ContactPage = () => {
 
     const [name, setName] = useState('')
     const [selectedGroups, setSelectedGroups] = useState<number[]>([])
-    const [dataField, setDataField] = useState('')
+    
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [picture, setPicture] = useState<File | null>(null)
@@ -84,25 +84,14 @@ const ContactPage = () => {
         e.preventDefault()
         setFormError(null)
         if (!name.trim()) { setFormError('Name is required'); return false }
-        let parsedData: Record<string, unknown> = {}
-        if (dataField.trim()) {
-            try {
-                parsedData = JSON.parse(dataField)
-            } catch {
-                setFormError('Data must be valid JSON')
-                return false
-            }
-        }
         try {
             const fd = new FormData()
             fd.append('name', name.trim())
             selectedGroups.forEach(g => fd.append('groups', String(g)))
-            if (Object.keys(parsedData).length) fd.append('data', JSON.stringify(parsedData))
             if (picture) fd.append('picture', picture)
             const res = await createContact(fd as unknown as { name?: string }).unwrap()
             setName('')
             setSelectedGroups([])
-            setDataField('')
             setPicture(null)
             toast.success(extractSuccessMessage(res, 'Contact created'))
             return true
@@ -489,17 +478,7 @@ const ContactPage = () => {
                                 <input id="picture" type="file" accept="image/*" onChange={(e) => setPicture(e.target.files?.[0] || null)} className="h-9 rounded-md border bg-background px-2 text-sm" />
                                 <span className="text-xs text-muted-foreground">Optional. JPG/PNG recommended.</span>
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="data">Data (JSON)</Label>
-                                <textarea
-                                    id="data"
-                                    className="min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
-                                    placeholder='{"phone": "123-456-7890"}'
-                                    value={dataField}
-                                    onChange={e => setDataField(e.target.value)}
-                                />
-                                <span className="text-xs text-muted-foreground">Optional. Must be valid JSON.</span>
-                            </div>
+                            
                             <div className="grid gap-2">
                                 <Label>Groups</Label>
                                 <div className="flex flex-wrap gap-3">
@@ -562,21 +541,11 @@ const ContactPage = () => {
                             className="grid gap-3"
                             onSubmit={async (e) => {
                                 e.preventDefault()
-                                let parsedData: Record<string, unknown> = {}
-                                if (dataField.trim()) {
-                                    try {
-                                        parsedData = JSON.parse(dataField)
-                                    } catch {
-                                        toast.error('Data must be valid JSON')
-                                        return
-                                    }
-                                }
                                 try {
                                     const id = editingId!
                                     const fd = new FormData()
                                     fd.append('name', editName.trim())
                                     editGroups.forEach(g => fd.append('groups', String(g)))
-                                    if (Object.keys(parsedData).length) fd.append('data', JSON.stringify(parsedData))
                                     if (editPicture) fd.append('picture', editPicture)
                                     const res = await updateContact({ id, changes: fd }).unwrap()
                                     toast.success(extractSuccessMessage(res, 'Contact updated'))
@@ -609,17 +578,7 @@ const ContactPage = () => {
                                     ))}
                                 </div>
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit-data">Data (JSON)</Label>
-                                <textarea
-                                    id="edit-data"
-                                    className="min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
-                                    placeholder='{"phone": "123-456-7890"}'
-                                    value={dataField}
-                                    onChange={e => setDataField(e.target.value)}
-                                />
-                                <span className="text-xs text-muted-foreground">Optional. Must be valid JSON.</span>
-                            </div>
+                            
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
                                 <Button type="submit" disabled={updating}>Save</Button>
