@@ -99,6 +99,10 @@ Then restart the dev server.
 
 Tip: You can also copy `.env.example` to `.env` and edit the value.
 
+Notes
+- VITE_API_TARGET is only used by the Vite dev server. If you run the production image (Docker/Nginx) in a Codespace, set API_TARGET for the container instead.
+- After changing `.env`, you must restart `npm run dev` for the new value to take effect.
+
 ---
 
 ## Configuration

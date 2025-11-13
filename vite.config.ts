@@ -7,6 +7,23 @@ import { defineConfig, loadEnv } from "vite"
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "")
   const target = env.VITE_API_TARGET || "http://localhost:8000/"
+  // If target already includes "/api" in its path, keep the current rewrite (strip "/api")
+  // so that "/api/foo" -> target"/api" + "foo". Otherwise, allow opting out of rewrite
+  // via VITE_API_PRESERVE_PREFIX=true to forward "/api/*" as-is to the backend.
+  let rewrite:
+    | undefined
+    | ((p: string) => string)
+  const targetPath = (() => {
+    try { return new URL(target).pathname || "/" } catch { return "/" }
+  })()
+  const preservePrefix = env.VITE_API_PRESERVE_PREFIX === "true"
+  if (targetPath.includes("/api")) {
+    rewrite = (path) => path.replace(/^\/api/, "")
+  } else if (!preservePrefix) {
+    rewrite = (path) => path.replace(/^\/api/, "")
+  } else {
+    rewrite = undefined
+  }
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -20,7 +37,7 @@ export default defineConfig(({ mode }) => {
           target,
           changeOrigin: true,
           secure: false,
-          rewrite: (path) => path.replace(/^\/api/, ""),
+          rewrite,
         }
       },
     },
