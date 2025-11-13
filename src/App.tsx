@@ -14,6 +14,17 @@ import ResetPasswordPage from './pages/reset-password';
 import VerifyEmailPage from './pages/verify-email';
 import { MetaProvider } from './context/MetaContext';
 
+// Determine basename from Vite's BASE_URL (e.g., "/PayFirst/") and trim trailing slash for React Router
+const BASENAME = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const base: string = ((import.meta as any)?.env?.BASE_URL) || '/'
+    return base.endsWith('/') ? base.slice(0, -1) : base
+  } catch {
+    return ''
+  }
+})()
+
 // Define public auth routes explicitly and guard app routes with PrivateRoute
 const router = createBrowserRouter([
   {
@@ -31,7 +42,7 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/verify-email', element: <VerifyEmailPage /> },
-]);
+], { basename: BASENAME });
 
 export default function App() {
   return (

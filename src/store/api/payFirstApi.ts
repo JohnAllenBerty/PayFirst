@@ -73,10 +73,16 @@ export type ListParams = {
 async function handle401Response() {
     // Redirect to login on unauthorized, but avoid bouncing when already on login/sign-up routes
     if (typeof window !== 'undefined') {
+        // Respect app basename (e.g., "/PayFirst") for GitHub Pages
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const base: string = (() => { try { return ((import.meta as any)?.env?.BASE_URL) || '/' } catch { return '/' } })()
+        const prefix = base.replace(/\/$/, '') // "/PayFirst"
         const path = window.location.pathname || ''
-        const onAuthRoute = path.startsWith('/login') || path.startsWith('/sign-up')
+        // Strip basename for route checks
+        const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
+        const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
         if (!onAuthRoute) {
-            window.location.href = '/login'
+            window.location.href = `${prefix}/login`
         }
     }
 }
