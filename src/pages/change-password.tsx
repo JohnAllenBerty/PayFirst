@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { toast } from 'react-toastify'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 
 const ChangePasswordPage = () => {
+    const { title } = useMetaPageTitle('/change-password', 'Change Password • PayFirst')
     const [password, setPassword] = useState('')
     const [newPassword, setNewPassword] = useState('')
     const [confirm, setConfirm] = useState('')
@@ -56,7 +58,7 @@ const ChangePasswordPage = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Change Password</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Update your account password.</p>
             </div>
 

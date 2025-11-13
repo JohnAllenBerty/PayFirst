@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, useListPaymentMethodsQuery, useCreatePaymentMethodMutation, useListPaymentSourcesQuery, useCreatePaymentSourceMutation, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact, type PaymentMethod, type PaymentSource } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,7 +11,7 @@ import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const TransactionsPage = () => {
-    usePageTitle('Transactions • PayFirst')
+    const { title } = useMetaPageTitle('/transactions', 'Transactions • PayFirst')
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
     const [ordering, setOrdering] = useState<string>('label')
@@ -216,7 +216,7 @@ const TransactionsPage = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Transactions</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Record credits and debits for your contacts.</p>
             </div>
 

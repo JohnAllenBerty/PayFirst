@@ -9,6 +9,7 @@ import { Search, ArrowDownAZ, ArrowUpAZ, ChevronDown, ChevronRight, FolderTree, 
 import { Skeleton } from '@/components/ui/skeleton'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 
 const ContactPage = () => {
     const [ordering, setOrdering] = useState<string>('name')
@@ -225,10 +226,11 @@ const ContactPage = () => {
         )
     }
 
+    const { title } = useMetaPageTitle('/contact', 'Contacts • PayFirst')
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Contacts</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Manage your contacts and assign them to groups.</p>
             </div>
 

@@ -8,6 +8,7 @@ import { toast } from 'react-toastify'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { ChevronDown, ChevronRight, Search, ArrowUpAZ, ArrowDownAZ, FolderTree, LayoutList } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 
 // Tree node type for rendering hierarchical groups
 type GroupTreeNode = { id: number; name: string; parent_group?: number | null; children: GroupTreeNode[] }
@@ -78,6 +79,7 @@ function GroupNode({
 
 const ContactGroupList = () => {
     const [ordering, setOrdering] = useState<string>('name')
+    const { title } = useMetaPageTitle('/contact/groups', 'Contact Groups • PayFirst')
     const [nameQuery, setNameQuery] = useState('')
     const [filters, setFilters] = useState<{ name?: string }>({})
     const { data: groupsRes, isLoading, isFetching } = useListContactGroupsQuery({ ordering, search: filters.name || undefined })
@@ -185,7 +187,7 @@ const ContactGroupList = () => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-1">
-                <h1 className="text-xl font-semibold">Contact Groups</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Organize your contacts into groups and subgroups.</p>
             </div>
 

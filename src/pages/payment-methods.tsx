@@ -9,10 +9,10 @@ import { ArrowDownAZ, ArrowUpAZ, Plus } from 'lucide-react'
 import type { ApiFail, ApiSuccess, Paginated, PaymentMethod } from '@/store/api/payFirstApi'
 import { useListPaymentMethodsQuery, useCreatePaymentMethodMutation, useUpdatePaymentMethodMutation, useDeletePaymentMethodMutation } from '@/store/api/payFirstApi'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 
 const PaymentMethodsPage = () => {
-  usePageTitle('Payment Methods • PayFirst')
+  const { title } = useMetaPageTitle('/payment-methods', 'Payment Methods • PayFirst')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [ordering, setOrdering] = useState<string>('label')
@@ -73,7 +73,7 @@ const PaymentMethodsPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Payment Methods</h1>
+          <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
           <p className="text-sm text-muted-foreground">Manage methods you use for transactions and repayments.</p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>

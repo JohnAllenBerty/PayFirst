@@ -3,6 +3,7 @@ import {
   SquareTerminal,
   Wallet2
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import * as React from "react"
 
 import { NavMain } from "@/components/nav-main"
@@ -16,81 +17,43 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useProfileQuery, type ApiSuccess, type ApiFail, type Profile } from "@/store/api/payFirstApi"
+import { useMeta } from "@/context/MetaContext"
 
-// This is sample data.
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+// Static shells; labels will be overridden by Meta when present
+const sections = [
+  {
+    key: 'contacts',
+    title: 'Contacts',
+    icon: SquareTerminal,
+    items: [
+      { key: 'contacts', title: 'All Contacts', url: '/contact' },
+      { key: 'contact_groups', title: 'Groups', url: '/contact/groups' },
+    ],
   },
-  teams: [
-    {
-      name: "Pay First",
-      logo: Wallet2,
-      plan: "Enterprise",
-    },
-  ],
-  navMain: [
-    {
-      title: "Contacts",
-      url: "/contact",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "All Contacts",
-          url: "/contact",
-        },
-        {
-          title: "Groups",
-          url: "/contact/groups",
-        },
-      ],
-    },
-    {
-      title: "Finance",
-      url: "/transactions",
-      icon: Wallet2,
-      items: [
-        {
-          title: "Transactions",
-          url: "/transactions",
-        },
-        {
-          title: "Repayments",
-          url: "/repayments",
-        },
-        {
-          title: "Payment Methods",
-          url: "/payment-methods",
-        },
-            {
-              title: "Payment Sources",
-              url: "/payment-sources",
-            },
-      ],
-    },
-    {
-      title: "Account",
-      url: "/profile",
-      icon: Settings2,
-      items: [
-        {
-          title: "Profile",
-          url: "/profile",
-        },
-        {
-          title: "Change Password",
-          url: "/change-password",
-        },
-      ],
-    },
-  ],
-  projects: [],
-}
+  {
+    key: 'finance',
+    title: 'Finance',
+    icon: Wallet2,
+    items: [
+      { key: 'transactions', title: 'Transactions', url: '/transactions' },
+      { key: 'repayments', title: 'Repayments', url: '/repayments' },
+      { key: 'payment_methods', title: 'Payment Methods', url: '/payment-methods' },
+      { key: 'payment_sources', title: 'Payment Sources', url: '/payment-sources' },
+    ],
+  },
+  {
+    key: 'account',
+    title: 'Account',
+    icon: Settings2,
+    items: [
+      { key: 'profile', title: 'Profile', url: '/profile' },
+      { key: 'change_password', title: 'Change Password', url: '/change-password' },
+    ],
+  },
+]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { getLabel, isActive } = useMeta()
   const { data: profileRes } = useProfileQuery()
   const userFromProfile = React.useMemo(() => {
     const fallback = { name: "User", email: "", avatar: "" }
@@ -107,6 +70,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
     return fallback
   }, [profileRes])
+  const navMain = React.useMemo(() => {
+    // Map sections + items with Meta labels and visibility
+    return sections
+      .map((sec) => {
+        const visibleItems = sec.items.filter((it) => isActive(it.url) !== false && isActive(it.key) !== false)
+        if (visibleItems.length === 0 && isActive(sec.key) === false) return null
+        return {
+          title: getLabel(sec.key, sec.title),
+          url: visibleItems[0]?.url || '#',
+          icon: sec.icon,
+          isActive: true,
+          items: visibleItems.map((it) => ({
+            title: getLabel(it.url, getLabel(it.key, it.title)),
+            url: it.url,
+          })),
+        }
+      })
+  .filter(Boolean) as Array<{ title: string; url: string; icon?: LucideIcon; isActive?: boolean; items: { title: string; url: string }[] }>
+  }, [getLabel, isActive])
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -119,13 +101,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <Wallet2 className="size-4" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-medium">{data.teams[0].name}</span>
-            <span className="truncate text-xs">{data.teams[0].plan}</span>
+            <span className="truncate font-medium">Pay First</span>
+            <span className="truncate text-xs">App</span>
           </div>
         </SidebarMenuButton>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter>

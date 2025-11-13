@@ -2,11 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSummaryQuery, useMetaQuery, type ApiFail, type ApiSuccess, type SummaryItem, type ModuleInfo } from "@/store/api/payFirstApi";
+import { useMetaPageTitle } from '@/hooks/useMeta'
 import { useMemo } from "react";
 
 const Dashboard = () => {
     const { data: summaryRes, isLoading: loadingSummary } = useSummaryQuery();
     const { data: metaRes, isLoading: loadingMeta } = useMetaQuery();
+    const { title } = useMetaPageTitle('/', 'Dashboard • PayFirst')
 
     const summary = useMemo(() => {
         const res = summaryRes as ApiFail | ApiSuccess<SummaryItem[]> | SummaryItem[] | undefined;
@@ -61,7 +63,7 @@ const Dashboard = () => {
     return (
         <div className="h-full bg-gray-50 p-6 space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Dashboard</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/,'')}</h1>
                 <p className="text-sm text-muted-foreground">Overview and quick insights.</p>
             </div>
 

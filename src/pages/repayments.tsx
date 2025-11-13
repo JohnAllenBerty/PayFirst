@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const RepaymentsPage = () => {
-    usePageTitle('Repayments • PayFirst')
+    const { title } = useMetaPageTitle('/repayments', 'Repayments • PayFirst')
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
     const [ordering, setOrdering] = useState<string>('label')
@@ -202,7 +202,7 @@ const RepaymentsPage = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Repayments</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Record repayments against transactions.</p>
             </div>
 

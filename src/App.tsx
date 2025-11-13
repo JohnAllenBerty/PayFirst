@@ -12,6 +12,7 @@ import { store } from './store/store';
 import ForgotPasswordPage from './pages/forgot-password';
 import ResetPasswordPage from './pages/reset-password';
 import VerifyEmailPage from './pages/verify-email';
+import { MetaProvider } from './context/MetaContext';
 
 // Define public auth routes explicitly and guard app routes with PrivateRoute
 const router = createBrowserRouter([
@@ -36,9 +37,11 @@ export default function App() {
   return (
     <Provider store={store}>
       <ToastContainer theme='colored' />
-      <Suspense fallback={<div className="w-full text-center py-8">Loading...</div>}>
-        <RouterProvider router={router} />
-      </Suspense>
+      <MetaProvider>
+        <Suspense fallback={<div className="w-full text-center py-8">Loading...</div>}>
+          <RouterProvider router={router} />
+        </Suspense>
+      </MetaProvider>
     </Provider>
   )
 }

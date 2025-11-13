@@ -15,35 +15,49 @@ import {
 } from "@/components/ui/sidebar"
 import { useMemo, Fragment } from "react"
 import { Outlet, useLocation, Link } from "react-router-dom"
+import { useMeta } from "@/context/MetaContext"
 
 export default function Page() {
     const location = useLocation()
+    const { getLabel } = useMeta()
 
     const crumbs = useMemo(() => {
         const segments = location.pathname.split("/").filter(Boolean)
 
-        const known: Record<string, string> = {
-            "": "Dashboard",
-            "sign-up": "Sign up",
-            "login": "Login",
-            "dashboard": "Dashboard",
-            "profile": "Profile",
-            "contact": "Contact",
-            "groups": "Groups",
-            "settings": "Settings",
-            // add more known mappings here as you add routes
-        }
+        const rootLabel = getLabel('/', 'Dashboard')
+        const items: { name: string; path: string }[] = [{ name: rootLabel, path: "/" }]
 
-        const items: { name: string; path: string }[] = [{ name: "Dashboard", path: "/" }]
+        // Normalize any label or segment into Title Case words, removing slashes/hyphens/underscores
+        const humanize = (value: string | undefined): string => {
+            const s = (value || '').toString()
+                .replace(/^\/+|\/+$/g, '') // trim leading/trailing slashes
+                .replace(/[/_-]+/g, ' ') // replace separators with spaces
+                .trim()
+                .replace(/\s+/g, ' ')
+            if (!s) return ''
+            return s.replace(/\b\w/g, c => c.toUpperCase())
+        }
 
         segments.forEach((seg, i) => {
             const path = "/" + segments.slice(0, i + 1).join("/")
-            const name = known[seg] ?? seg.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-            items.push({ name, path })
+
+            // Build labels without leading slashes; capitalize words
+            let label: string | undefined
+            if (i === 0) {
+                // Top-level: prefer a clean Meta label if available and not a path-like string
+                const metaByPath = getLabel(path)
+                const safeMeta = metaByPath && !metaByPath.startsWith('/') ? metaByPath : undefined
+                label = humanize(safeMeta || getLabel(seg) || seg)
+            } else {
+                // Nested: strictly humanize; do not use Meta for nested segments
+                label = humanize(seg)
+            }
+
+            items.push({ name: label, path })
         })
 
         return items
-    }, [location.pathname])
+    }, [location.pathname, getLabel])
 
     return (
         <SidebarProvider>

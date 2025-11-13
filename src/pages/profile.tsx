@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { toast } from 'react-toastify'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { useMetaPageTitle } from '@/hooks/useMeta'
 
 const ProfilePage = () => {
     const { data, isLoading, refetch } = useProfileQuery()
+    const { title } = useMetaPageTitle('/profile', 'Profile • PayFirst')
     const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation()
     const failMessage = useMemo(() => {
         const res = data as ApiFail | ApiSuccess<Profile> | undefined
@@ -29,7 +31,7 @@ const ProfilePage = () => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-xl font-semibold">Profile</h1>
+                <h1 className="text-xl font-semibold">{title.replace(/\s*•\s*PayFirst$/, '')}</h1>
                 <p className="text-sm text-muted-foreground">Your account information.</p>
             </div>
 
