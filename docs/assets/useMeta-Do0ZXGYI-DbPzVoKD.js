@@ -1,0 +1,1 @@
+import{a3 as c,v as r}from"./index-DnKD0KXe.js";function s(e,o){const{getTitle:n,ready:u}=c(),t=r.useMemo(()=>n(e,o),[n,e,o]);return r.useEffect(()=>{if(!t)return;const i=document.title;return document.title=t,()=>{document.title=i}},[t]),{title:t,ready:u}}export{s as a};
