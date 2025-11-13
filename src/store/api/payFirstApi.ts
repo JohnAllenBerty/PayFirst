@@ -89,7 +89,7 @@ async function handle500Response() {
 }
 
 const baseQuery = fetchBaseQuery({
-    baseUrl: '/api', // Vite proxy -> Django at http://localhost:8000
+    baseUrl: '/PayFirst/api', // Vite proxy -> Django at http://localhost:8000
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint
