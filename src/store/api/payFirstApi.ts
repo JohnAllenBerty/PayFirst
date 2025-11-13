@@ -88,8 +88,29 @@ async function handle500Response() {
     toast.error('Internal Server Error');
 }
 
+// Resolve API base URL
+// - In development, Vite dev server proxies "/api" to VITE_API_TARGET
+// - In production (e.g., GitHub Pages), we must call the backend directly using an absolute URL
+//   provided by VITE_API_BASE or VITE_API_TARGET at build time.
+const API_BASE = (() => {
+    // import.meta.env is defined in Vite builds/runtime
+    // Prefer VITE_API_BASE, then VITE_API_TARGET; else fall back to the dev proxy path "/api"
+    // Normalize by trimming trailing slashes
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const env = (import.meta as any)?.env || {};
+        const raw = env.VITE_API_BASE || env.VITE_API_TARGET;
+        if (typeof raw === 'string' && raw.length > 0) {
+            return String(raw).replace(/\/+$/, '');
+        }
+    } catch {
+        // noop: not running in Vite context (e.g., tests)
+    }
+    return '/api';
+})();
+
 const baseQuery = fetchBaseQuery({
-    baseUrl: '/api', // Vite proxy -> Django at http://localhost:8000
+    baseUrl: API_BASE, // Dev: "/api" (proxied). Prod: absolute origin (e.g., https://api.example.com)
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint
