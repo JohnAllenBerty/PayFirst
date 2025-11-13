@@ -1,16 +1,18 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState, useEffect } from 'react'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Search, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
-import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction, type PaymentMethod } from '@/store/api/payFirstApi'
-import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation, useListPaymentMethodsQuery } from '@/store/api/payFirstApi'
+import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction, type PaymentMethod, type PaymentSource } from '@/store/api/payFirstApi'
+import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation, useListPaymentMethodsQuery, useCreatePaymentMethodMutation, useListPaymentSourcesQuery, useCreatePaymentSourceMutation } from '@/store/api/payFirstApi'
 import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const RepaymentsPage = () => {
+    usePageTitle('Repayments • PayFirst')
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
     const [ordering, setOrdering] = useState<string>('label')
@@ -22,6 +24,9 @@ const RepaymentsPage = () => {
 
     const { data: txRes, isLoading: loadingTx } = useListTransactionsQuery({ page_size: 1000 })
     const { data: pmRes, isLoading: loadingPM } = useListPaymentMethodsQuery({ page_size: 1000 })
+    const [createPM, { isLoading: creatingPM }] = useCreatePaymentMethodMutation()
+    const { data: psRes, isLoading: loadingPS } = useListPaymentSourcesQuery({ page_size: 1000 })
+    const [createPS, { isLoading: creatingPS }] = useCreatePaymentSourceMutation()
 
     // Normalize transactions array once; use this in UI and search
     const transactions = useMemo(() => {
@@ -52,6 +57,20 @@ const RepaymentsPage = () => {
         const pg = res as Paginated<PaymentMethod>
         return Array.isArray(pg.results) ? pg.results : []
     }, [pmRes])
+    const paymentSources = useMemo(() => {
+        const res = psRes as ApiFail | Paginated<PaymentSource> | ApiSuccess<Paginated<PaymentSource> | PaymentSource[]> | undefined
+        if (!res) return [] as PaymentSource[]
+        if ((res as ApiFail).status === false) return [] as PaymentSource[]
+        if ((res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>
+            const d = ok.data as unknown
+            if (Array.isArray(d)) return d
+            const pg = d as Paginated<PaymentSource>
+            return Array.isArray(pg.results) ? pg.results : []
+        }
+        const pg = res as Paginated<PaymentSource>
+        return Array.isArray(pg.results) ? pg.results : []
+    }, [psRes])
 
     const searchText = useMemo(() => {
         const parts: string[] = []
@@ -110,6 +129,12 @@ const RepaymentsPage = () => {
     const [remarks, setRemarks] = useState('')
     const [date, setDate] = useState('')
     const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
+    const [paymentSource, setPaymentSource] = useState<number | ''>('')
+    const [txRef, setTxRef] = useState('')
+    const [showAddPM, setShowAddPM] = useState(false)
+    const [newPMLabel, setNewPMLabel] = useState('')
+    const [newPMDefault, setNewPMDefault] = useState(false)
+    const [newPMCommon, setNewPMCommon] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
 
@@ -121,6 +146,25 @@ const RepaymentsPage = () => {
     const [editRemarks, setEditRemarks] = useState('')
     const [editDate, setEditDate] = useState('')
     const [editPaymentMethod, setEditPaymentMethod] = useState<number | ''>('')
+    const [editPaymentSource, setEditPaymentSource] = useState<number | ''>('')
+    const [editTxRef, setEditTxRef] = useState('')
+    const [showAddPMEdit, setShowAddPMEdit] = useState(false)
+    const [newPMLabelEdit, setNewPMLabelEdit] = useState('')
+    const [newPMDefaultEdit, setNewPMDefaultEdit] = useState(false)
+    const [newPMCommonEdit, setNewPMCommonEdit] = useState(false)
+
+    // Zero-results toast when filters applied and no results
+        const lastToastSignature = useRef<string>('')
+        useEffect(() => {
+            if (loadingRep) return
+            const activeFilter = Boolean(filters.label || typeof filters.transaction === 'number')
+            if (!activeFilter) return
+            const signature = `${filters.label || ''}|${filters.transaction || ''}`
+            if (repayments.length === 0 && lastToastSignature.current !== signature) {
+                lastToastSignature.current = signature
+                toast.info('No repayments match your filters. Adjust or clear filters to see results.')
+            }
+        }, [loadingRep, repayments.length, filters])
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
     const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -138,8 +182,10 @@ const RepaymentsPage = () => {
                 remarks: remarks.trim(),
                 date: date || new Date().toISOString().slice(0, 10),
                 payment_method: paymentMethod === '' ? null : Number(paymentMethod),
+                payment_source: paymentSource === '' ? null : Number(paymentSource),
+                transaction_reference: txRef.trim() || null,
             }).unwrap()
-            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(''); setPaymentMethod('')
+            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(''); setPaymentMethod(''); setPaymentSource(''); setTxRef('')
             toast.success(extractSuccessMessage(res, 'Repayment created'))
             setRefresh((c) => c + 1)
             return true
@@ -194,13 +240,13 @@ const RepaymentsPage = () => {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by label" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
                                     <span className="inline-flex items-center gap-1">Label {ordering.includes('label') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by amount" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
                                     <span className="inline-flex items-center gap-1">Amount {ordering.includes('amount') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by date" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
                                     <span className="inline-flex items-center gap-1">Date {ordering.includes('date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
                                 <TableHead>Remarks</TableHead>
@@ -272,7 +318,7 @@ const RepaymentsPage = () => {
                             ) : filtered.length ? (
                                 filtered.map((r: Repayment) => (
                                     <TableRow key={r.id}>
-                                        <TableCell className="font-medium">{r.label}</TableCell>
+                                        <TableCell className="font-medium" title={r.remarks ? `${r.label} — ${r.remarks}` : r.label}>{r.label}</TableCell>
                                         <TableCell>{r.amount}</TableCell>
                                         <TableCell>{r.date}</TableCell>
                                         <TableCell className="text-muted-foreground">{r.remarks || '—'}</TableCell>
@@ -280,7 +326,7 @@ const RepaymentsPage = () => {
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(r.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); setEditPaymentSource(typeof r.payment_source === 'number' ? r.payment_source : ''); setEditTxRef(r.transaction_reference || ''); }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(r.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -309,10 +355,10 @@ const RepaymentsPage = () => {
             {/* Create modal */}
             {createOpen && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="new-repayment-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">New repayment</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+                            <h3 id="new-repayment-title" className="font-semibold">New repayment</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
                         </div>
                         <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-3">
                             <div className="grid gap-2">
@@ -344,6 +390,70 @@ const RepaymentsPage = () => {
                                     <option value="">{loadingPM ? 'Loading…' : 'None'}</option>
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowAddPM(v => !v)}>{showAddPM ? 'Cancel' : 'Add new'}</Button>
+                                    {showAddPM && creatingPM && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                                {showAddPM && (
+                                    <div className="mt-2 border rounded-md p-2 space-y-2">
+                                        <div className="grid gap-1">
+                                            <Label htmlFor="new-pm-label" className="text-xs">New method label</Label>
+                                            <Input id="new-pm-label" value={newPMLabel} onChange={(e) => setNewPMLabel(e.target.value)} placeholder="e.g. Cash" className="h-8" />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMDefault} onChange={(e) => setNewPMDefault(e.target.checked)} /> Default</label>
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMCommon} onChange={(e) => setNewPMCommon(e.target.checked)} /> Common</label>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button type="button" size="sm" variant="outline" className="h-7 px-3" onClick={() => { setShowAddPM(false); setNewPMLabel(''); setNewPMDefault(false); setNewPMCommon(false) }}>Cancel</Button>
+                                            <Button type="button" size="sm" className="h-7 px-3" disabled={creatingPM} onClick={async () => {
+                                                if (!newPMLabel.trim()) { toast.error('Label required'); return }
+                                                if (newPMDefault && paymentMethods.some(pm => pm.is_default)) { toast.error('Only one default method allowed'); return }
+                                                try {
+                                                    const res = await createPM({ label: newPMLabel.trim(), is_default: newPMDefault, is_common: newPMCommon }).unwrap()
+                                                    if ((res as ApiSuccess<PaymentMethod>)?.status) {
+                                                        const created = (res as ApiSuccess<PaymentMethod>).data
+                                                        setPaymentMethod(created.id)
+                                                        toast.success(extractSuccessMessage(res, 'Added'))
+                                                    } else {
+                                                        toast.success('Added')
+                                                    }
+                                                    setShowAddPM(false); setNewPMLabel(''); setNewPMDefault(false); setNewPMCommon(false)
+                                                } catch (e2) {
+                                                    toast.error(extractErrorMessage(e2))
+                                                }
+                                            }}>Save</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="payment-source">Payment source (optional)</Label>
+                                <select id="payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={paymentSource} onChange={(e) => setPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">{loadingPS ? 'Loading…' : 'None'}</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={async () => {
+                                        const v = prompt('New payment source label?')?.trim()
+                                        if (!v) return
+                                        try {
+                                            const res = await createPS({ label: v }).unwrap()
+                                            if ((res as ApiSuccess<PaymentSource>)?.status) {
+                                                const created = (res as ApiSuccess<PaymentSource>).data
+                                                setPaymentSource(created.id)
+                                                toast.success(extractSuccessMessage(res, 'Added'))
+                                            } else {
+                                                toast.success('Added')
+                                            }
+                                        } catch (e2) { toast.error(extractErrorMessage(e2)) }
+                                    }}>Add new</Button>
+                                    {creatingPS && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="tx-ref">Reference (optional)</Label>
+                                <Input id="tx-ref" value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder="e.g., UTR/Ref no." />
                             </div>
                             {formError && <div className="text-sm text-red-600">{formError}</div>}
                             <div className="flex items-center gap-2 justify-end">
@@ -358,10 +468,10 @@ const RepaymentsPage = () => {
             {/* View modal */}
             {viewingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setViewingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="view-repayment-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Repayment details</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
+                            <h3 id="view-repayment-title" className="font-semibold">Repayment details</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
                         </div>
                         {(() => {
                             const rep = repayments.find((x: Repayment) => x.id === viewingId)
@@ -375,6 +485,8 @@ const RepaymentsPage = () => {
                                     <div><span className="text-muted-foreground">Date:</span> {rep.date}</div>
                                     <div><span className="text-muted-foreground">Remarks:</span> {rep.remarks || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (rep.payment_method ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Payment source:</span> {paymentSources.find(ps => ps.id === (rep.payment_source ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Reference:</span> {rep.transaction_reference || '—'}</div>
                                 </div>
                             )
                         })()}
@@ -385,17 +497,17 @@ const RepaymentsPage = () => {
             {/* Edit modal */}
             {editingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setEditingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-repayment-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Edit repayment</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
+                            <h3 id="edit-repayment-title" className="font-semibold">Edit repayment</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
                         </div>
                         <form className="grid gap-3" onSubmit={async (e) => {
                             e.preventDefault()
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                const res = await updateRep({ id, changes: { label: editLabel.trim(), transaction: editTransaction as number, amount: amt, remarks: editRemarks.trim(), date: editDate, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod) } }).unwrap()
+                                const res = await updateRep({ id, changes: { label: editLabel.trim(), transaction: editTransaction as number, amount: amt, remarks: editRemarks.trim(), date: editDate, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
                                 toast.success(extractSuccessMessage(res, 'Repayment updated'))
                                 setEditingId(null)
                             } catch (e) {
@@ -406,6 +518,17 @@ const RepaymentsPage = () => {
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-label">Label</Label>
                                 <Input id="edit-label" value={editLabel} onChange={(e) => setEditLabel(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-payment-source">Payment source (optional)</Label>
+                                <select id="edit-payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={editPaymentSource} onChange={(e) => setEditPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">None</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-tx-ref">Reference (optional)</Label>
+                                <Input id="edit-tx-ref" value={editTxRef} onChange={(e) => setEditTxRef(e.target.value)} placeholder="e.g., UTR/Ref no." />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-transaction">Transaction</Label>
@@ -432,6 +555,42 @@ const RepaymentsPage = () => {
                                     <option value="">None</option>
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowAddPMEdit(v => !v)}>{showAddPMEdit ? 'Cancel' : 'Add new'}</Button>
+                                    {showAddPMEdit && creatingPM && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                                {showAddPMEdit && (
+                                    <div className="mt-2 border rounded-md p-2 space-y-2">
+                                        <div className="grid gap-1">
+                                            <Label htmlFor="new-pm-label-edit" className="text-xs">New method label</Label>
+                                            <Input id="new-pm-label-edit" value={newPMLabelEdit} onChange={(e) => setNewPMLabelEdit(e.target.value)} placeholder="e.g. Cash" className="h-8" />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMDefaultEdit} onChange={(e) => setNewPMDefaultEdit(e.target.checked)} /> Default</label>
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMCommonEdit} onChange={(e) => setNewPMCommonEdit(e.target.checked)} /> Common</label>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button type="button" size="sm" variant="outline" className="h-7 px-3" onClick={() => { setShowAddPMEdit(false); setNewPMLabelEdit(''); setNewPMDefaultEdit(false); setNewPMCommonEdit(false) }}>Cancel</Button>
+                                            <Button type="button" size="sm" className="h-7 px-3" disabled={creatingPM} onClick={async () => {
+                                                if (!newPMLabelEdit.trim()) { toast.error('Label required'); return }
+                                                if (newPMDefaultEdit && paymentMethods.some(pm => pm.is_default)) { toast.error('Only one default method allowed'); return }
+                                                try {
+                                                    const res = await createPM({ label: newPMLabelEdit.trim(), is_default: newPMDefaultEdit, is_common: newPMCommonEdit }).unwrap()
+                                                    if ((res as ApiSuccess<PaymentMethod>)?.status) {
+                                                        const created = (res as ApiSuccess<PaymentMethod>).data
+                                                        setEditPaymentMethod(created.id)
+                                                        toast.success(extractSuccessMessage(res, 'Added'))
+                                                    } else {
+                                                        toast.success('Added')
+                                                    }
+                                                    setShowAddPMEdit(false); setNewPMLabelEdit(''); setNewPMDefaultEdit(false); setNewPMCommonEdit(false)
+                                                } catch (e2) {
+                                                    toast.error(extractErrorMessage(e2))
+                                                }
+                                            }}>Save</Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
@@ -445,8 +604,8 @@ const RepaymentsPage = () => {
             {/* Delete confirm */}
             {confirmDeleteId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setConfirmDeleteId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="font-semibold mb-2">Delete repayment</h3>
+                    <div role="dialog" aria-modal="true" aria-labelledby="delete-repayment-title" className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <h3 id="delete-repayment-title" className="font-semibold mb-2">Delete repayment</h3>
                         <p className="text-sm text-muted-foreground mb-4">This action cannot be undone.</p>
                         <div className="flex items-center justify-end gap-2">
                             <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>

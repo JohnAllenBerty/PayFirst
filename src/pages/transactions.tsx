@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, useListPaymentMethodsQuery, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact, type PaymentMethod } from '@/store/api/payFirstApi'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { useListTransactionsQuery, useCreateTransactionMutation, useListContactsQuery, useUpdateTransactionMutation, useDeleteTransactionMutation, useListPaymentMethodsQuery, useCreatePaymentMethodMutation, useListPaymentSourcesQuery, useCreatePaymentSourceMutation, type ApiFail, type ApiSuccess, type Paginated, type Transaction, type Contact, type PaymentMethod, type PaymentSource } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const TransactionsPage = () => {
+    usePageTitle('Transactions • PayFirst')
     const [page, setPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
     const [ordering, setOrdering] = useState<string>('label')
@@ -24,6 +26,10 @@ const TransactionsPage = () => {
 
     // Payment methods for optional selection
     const { data: pmRes, isLoading: loadingPM } = useListPaymentMethodsQuery({ page_size: 1000 })
+    const [createPM, { isLoading: creatingPM }] = useCreatePaymentMethodMutation()
+    // Payment sources for optional selection
+    const { data: psRes, isLoading: loadingPS } = useListPaymentSourcesQuery({ page_size: 1000 })
+    const [createPS, { isLoading: creatingPS }] = useCreatePaymentSourceMutation()
     const paymentMethods = useMemo(() => {
         const res = pmRes as ApiFail | Paginated<PaymentMethod> | ApiSuccess<Paginated<PaymentMethod> | PaymentMethod[]> | undefined
         if (!res) return [] as PaymentMethod[]
@@ -36,6 +42,18 @@ const TransactionsPage = () => {
         const pg = res as Paginated<PaymentMethod>
         return Array.isArray(pg.results) ? pg.results : []
     }, [pmRes])
+    const paymentSources = useMemo(() => {
+        const res = psRes as ApiFail | Paginated<PaymentSource> | ApiSuccess<Paginated<PaymentSource> | PaymentSource[]> | undefined
+        if (!res) return [] as PaymentSource[]
+        if ((res as ApiFail).status === false) return [] as PaymentSource[]
+        if ((res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>).status === true) {
+            const ok = res as ApiSuccess<Paginated<PaymentSource> | PaymentSource[]>
+            const data = ok.data
+            return Array.isArray(data) ? data : ((data as Paginated<PaymentSource>).results ?? [])
+        }
+        const pg = res as Paginated<PaymentSource>
+        return Array.isArray(pg.results) ? pg.results : []
+    }, [psRes])
 
     // Normalize contacts array once; use this in UI and search
     const contacts = useMemo(() => {
@@ -123,6 +141,13 @@ const TransactionsPage = () => {
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
+    const [paymentSource, setPaymentSource] = useState<number | ''>('')
+    const [txRef, setTxRef] = useState('')
+    // Inline quick add payment method state (create modal)
+    const [showAddPM, setShowAddPM] = useState(false)
+    const [newPMLabel, setNewPMLabel] = useState('')
+    const [newPMDefault, setNewPMDefault] = useState(false)
+    const [newPMCommon, setNewPMCommon] = useState(false)
     // No debounce; filters apply only on Enter/Apply
 
     const filteredTx = transactions // server handles filtering and sorting
@@ -152,8 +177,10 @@ const TransactionsPage = () => {
                 return_date: returnDate || null,
                 date: new Date().toISOString().slice(0, 10),
                     payment_method: paymentMethod === '' ? null : Number(paymentMethod),
+                    payment_source: paymentSource === '' ? null : Number(paymentSource),
+                    transaction_reference: txRef.trim() || null,
             }).unwrap()
-                setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate(''); setPaymentMethod('')
+                setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate(''); setPaymentMethod(''); setPaymentSource(''); setTxRef('')
             toast.success(extractSuccessMessage(res, 'Transaction created'))
             setRefresh((c) => c + 1)
             return true
@@ -165,6 +192,26 @@ const TransactionsPage = () => {
         }
     }
     const [editPaymentMethod, setEditPaymentMethod] = useState<number | ''>('')
+    const [editPaymentSource, setEditPaymentSource] = useState<number | ''>('')
+    const [editTxRef, setEditTxRef] = useState('')
+    // Inline quick add for edit modal
+    const [showAddPMEdit, setShowAddPMEdit] = useState(false)
+    const [newPMLabelEdit, setNewPMLabelEdit] = useState('')
+    const [newPMDefaultEdit, setNewPMDefaultEdit] = useState(false)
+    const [newPMCommonEdit, setNewPMCommonEdit] = useState(false)
+
+    // Zero-results toast logic
+    const lastToastSignature = useRef<string>('')
+    useEffect(() => {
+        if (loadingTx) return
+        const activeFilter = Boolean(filters.label || filters._type || typeof filters.contact === 'number')
+        if (!activeFilter) return
+        const signature = `${filters.label || ''}|${filters._type || ''}|${filters.contact || ''}`
+        if (filteredTx.length === 0 && lastToastSignature.current !== signature) {
+            lastToastSignature.current = signature
+            toast.info('No transactions match your filters. Adjust or clear filters to see results.')
+        }
+    }, [loadingTx, filteredTx.length, filters])
 
     return (
         <div className="space-y-6">
@@ -207,19 +254,19 @@ const TransactionsPage = () => {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by label" onClick={() => setOrdering((prev) => prev === 'label' ? '-label' : 'label')}>
                                     <span className="inline-flex items-center gap-1">Label {ordering.includes('label') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by amount" onClick={() => setOrdering((prev) => prev === 'amount' ? '-amount' : 'amount')}>
                                     <span className="inline-flex items-center gap-1">Amount {ordering.includes('amount') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
                                 <TableHead>Pending</TableHead>
                                 <TableHead>Contact</TableHead>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by date" onClick={() => setOrdering((prev) => prev === 'date' ? '-date' : 'date')}>
                                     <span className="inline-flex items-center gap-1">Date {ordering.includes('date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
-                                <TableHead className="cursor-pointer select-none" onClick={() => setOrdering((prev) => prev === 'return_date' ? '-return_date' : 'return_date')}>
+                                <TableHead className="cursor-pointer select-none" aria-label="Sort by return date" onClick={() => setOrdering((prev) => prev === 'return_date' ? '-return_date' : 'return_date')}>
                                     <span className="inline-flex items-center gap-1">Return date {ordering.includes('return_date') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}</span>
                                 </TableHead>
                                 <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
@@ -298,7 +345,7 @@ const TransactionsPage = () => {
                             ) : filteredTx.length ? (
                                 (filters._type ? filteredTx.slice((page - 1) * pageSize, page * pageSize) : filteredTx).map((t: Transaction) => (
                                     <TableRow key={t.id}>
-                                        <TableCell className="font-medium">{t.label}</TableCell>
+                                        <TableCell className="font-medium" title={t.description ? `${t.label} — ${t.description}` : t.label}>{t.label}</TableCell>
                                         <TableCell className="uppercase">{t._type}</TableCell>
                                         <TableCell>{t.amount}</TableCell>
                                         <TableCell className="text-muted-foreground">{t.pending_amount}</TableCell>
@@ -308,7 +355,7 @@ const TransactionsPage = () => {
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(t.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); setEditPaymentMethod(typeof t.payment_method === 'number' ? t.payment_method : ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); setEditPaymentMethod(typeof t.payment_method === 'number' ? t.payment_method : ''); setEditPaymentSource(typeof t.payment_source === 'number' ? t.payment_source : ''); setEditTxRef(t.transaction_reference || ''); }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(t.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -336,10 +383,10 @@ const TransactionsPage = () => {
             {/* Create modal */}
             {createOpen && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="new-transaction-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">New transaction</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+                            <h3 id="new-transaction-title" className="font-semibold">New transaction</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
                         </div>
                         <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-3">
                             <div className="grid gap-2">
@@ -378,6 +425,72 @@ const TransactionsPage = () => {
                                     <option value="">{loadingPM ? 'Loading…' : 'None'}</option>
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowAddPM(v => !v)}>{showAddPM ? 'Cancel' : 'Add new'}</Button>
+                                    {showAddPM && creatingPM && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                                {showAddPM && (
+                                    <div className="mt-2 border rounded-md p-2 space-y-2">
+                                        <div className="grid gap-1">
+                                            <Label htmlFor="new-pm-label" className="text-xs">New method label</Label>
+                                            <Input id="new-pm-label" value={newPMLabel} onChange={(e) => setNewPMLabel(e.target.value)} placeholder="e.g. Cash" className="h-8" />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMDefault} onChange={(e) => setNewPMDefault(e.target.checked)} /> Default</label>
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMCommon} onChange={(e) => setNewPMCommon(e.target.checked)} /> Common</label>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button type="button" size="sm" variant="outline" className="h-7 px-3" onClick={() => {
+                                                setShowAddPM(false); setNewPMLabel(''); setNewPMDefault(false); setNewPMCommon(false)
+                                            }}>Cancel</Button>
+                                            <Button type="button" size="sm" className="h-7 px-3" disabled={creatingPM} onClick={async () => {
+                                                if (!newPMLabel.trim()) { toast.error('Label required'); return }
+                                                if (newPMDefault && paymentMethods.some(pm => pm.is_default)) { toast.error('Only one default method allowed'); return }
+                                                try {
+                                                    const res = await createPM({ label: newPMLabel.trim(), is_default: newPMDefault, is_common: newPMCommon }).unwrap()
+                                                    if ((res as ApiSuccess<PaymentMethod>)?.status) {
+                                                        const created = (res as ApiSuccess<PaymentMethod>).data
+                                                        setPaymentMethod(created.id)
+                                                        toast.success(extractSuccessMessage(res, 'Added'))
+                                                    } else {
+                                                        toast.success('Added')
+                                                    }
+                                                    setShowAddPM(false); setNewPMLabel(''); setNewPMDefault(false); setNewPMCommon(false)
+                                                } catch (e2) {
+                                                    toast.error(extractErrorMessage(e2))
+                                                }
+                                            }}>Save</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="payment-source">Payment source (optional)</Label>
+                                <select id="payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={paymentSource} onChange={(e) => setPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">{loadingPS ? 'Loading…' : 'None'}</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={async () => {
+                                        const v = prompt('New payment source label?')?.trim()
+                                        if (!v) return
+                                        try {
+                                            const res = await createPS({ label: v }).unwrap()
+                                            if ((res as ApiSuccess<PaymentSource>)?.status) {
+                                                const created = (res as ApiSuccess<PaymentSource>).data
+                                                setPaymentSource(created.id)
+                                                toast.success(extractSuccessMessage(res, 'Added'))
+                                            } else {
+                                                toast.success('Added')
+                                            }
+                                        } catch (e2) { toast.error(extractErrorMessage(e2)) }
+                                    }}>Add new</Button>
+                                    {creatingPS && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="tx-ref">Reference (optional)</Label>
+                                <Input id="tx-ref" value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder="e.g., UTR/Ref no." />
                             </div>
                             {formError && <div className="text-sm text-red-600">{formError}</div>}
                             <div className="flex items-center gap-2 justify-end">
@@ -391,10 +504,10 @@ const TransactionsPage = () => {
             {/* View modal */}
             {viewingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setViewingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="view-transaction-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Transaction details</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
+                            <h3 id="view-transaction-title" className="font-semibold">Transaction details</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
                         </div>
                         {(() => {
                             const tx = transactions.find(x => x.id === viewingId)
@@ -411,6 +524,8 @@ const TransactionsPage = () => {
                                     <div><span className="text-muted-foreground">Return date:</span> {tx.return_date || '—'}</div>
                                     <div><span className="text-muted-foreground">Description:</span> {tx.description || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (tx.payment_method ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Payment source:</span> {paymentSources.find(ps => ps.id === (tx.payment_source ?? -1))?.label || '—'}</div>
+                                    <div><span className="text-muted-foreground">Reference:</span> {tx.transaction_reference || '—'}</div>
                                 </div>
                             )
                         })()}
@@ -421,17 +536,17 @@ const TransactionsPage = () => {
             {/* Edit modal */}
             {editingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setEditingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-transaction-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Edit transaction</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
+                            <h3 id="edit-transaction-title" className="font-semibold">Edit transaction</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
                         </div>
                         <form className="grid gap-3" onSubmit={async (e) => {
                             e.preventDefault()
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod) } }).unwrap()
+                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
                                 toast.success('Transaction updated')
                                 setEditingId(null)
                             } catch (e) {
@@ -467,6 +582,55 @@ const TransactionsPage = () => {
                                     <option value="">None</option>
                                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.label}{pm.is_default ? ' (default)' : ''}</option>)}
                                 </select>
+                                <div className="flex items-center justify-between mt-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setShowAddPMEdit(v => !v)}>{showAddPMEdit ? 'Cancel' : 'Add new'}</Button>
+                                    {showAddPMEdit && creatingPM && <span className="text-xs text-muted-foreground">Saving…</span>}
+                                </div>
+                                {showAddPMEdit && (
+                                    <div className="mt-2 border rounded-md p-2 space-y-2">
+                                        <div className="grid gap-1">
+                                            <Label htmlFor="new-pm-label-edit" className="text-xs">New method label</Label>
+                                            <Input id="new-pm-label-edit" value={newPMLabelEdit} onChange={(e) => setNewPMLabelEdit(e.target.value)} placeholder="e.g. Cash" className="h-8" />
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMDefaultEdit} onChange={(e) => setNewPMDefaultEdit(e.target.checked)} /> Default</label>
+                                            <label className="flex items-center gap-1"><input type="checkbox" checked={newPMCommonEdit} onChange={(e) => setNewPMCommonEdit(e.target.checked)} /> Common</label>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button type="button" size="sm" variant="outline" className="h-7 px-3" onClick={() => {
+                                                setShowAddPMEdit(false); setNewPMLabelEdit(''); setNewPMDefaultEdit(false); setNewPMCommonEdit(false)
+                                            }}>Cancel</Button>
+                                            <Button type="button" size="sm" className="h-7 px-3" disabled={creatingPM} onClick={async () => {
+                                                if (!newPMLabelEdit.trim()) { toast.error('Label required'); return }
+                                                if (newPMDefaultEdit && paymentMethods.some(pm => pm.is_default)) { toast.error('Only one default method allowed'); return }
+                                                try {
+                                                    const res = await createPM({ label: newPMLabelEdit.trim(), is_default: newPMDefaultEdit, is_common: newPMCommonEdit }).unwrap()
+                                                    if ((res as ApiSuccess<PaymentMethod>)?.status) {
+                                                        const created = (res as ApiSuccess<PaymentMethod>).data
+                                                        setEditPaymentMethod(created.id)
+                                                        toast.success(extractSuccessMessage(res, 'Added'))
+                                                    } else {
+                                                        toast.success('Added')
+                                                    }
+                                                    setShowAddPMEdit(false); setNewPMLabelEdit(''); setNewPMDefaultEdit(false); setNewPMCommonEdit(false)
+                                                } catch (e2) {
+                                                    toast.error(extractErrorMessage(e2))
+                                                }
+                                            }}>Save</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-payment-source">Payment source (optional)</Label>
+                                <select id="edit-payment-source" className="h-9 rounded-md border bg-background px-3 text-sm" value={editPaymentSource} onChange={(e) => setEditPaymentSource(e.target.value ? Number(e.target.value) : '')}>
+                                    <option value="">None</option>
+                                    {paymentSources.map(ps => <option key={ps.id} value={ps.id}>{ps.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-tx-ref">Reference (optional)</Label>
+                                <Input id="edit-tx-ref" value={editTxRef} onChange={(e) => setEditTxRef(e.target.value)} placeholder="e.g., UTR/Ref no." />
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
@@ -480,8 +644,8 @@ const TransactionsPage = () => {
             {/* Delete confirm */}
             {confirmDeleteId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setConfirmDeleteId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="font-semibold mb-2">Delete transaction</h3>
+                    <div role="dialog" aria-modal="true" aria-labelledby="delete-transaction-title" className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <h3 id="delete-transaction-title" className="font-semibold mb-2">Delete transaction</h3>
                         <p className="text-sm text-muted-foreground mb-4">This action cannot be undone.</p>
                         <div className="flex items-center justify-end gap-2">
                             <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>

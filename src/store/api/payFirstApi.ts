@@ -22,6 +22,9 @@ export type ContactGroup = {
 };
 export type Contact = { id: number; name: string; owner: number; groups: number[]; data: Record<string, unknown> };
 export type PaymentMethod = { id: number; label: string; is_default: boolean; is_common: boolean; owner?: number };
+export type PaymentSource = { id: number; label: string; owner?: number };
+export type ModuleInfo = Record<string, unknown>;
+export type SummaryItem = Record<string, unknown>;
 export type Transaction = {
     id: number;
     label: string;
@@ -32,6 +35,8 @@ export type Transaction = {
     return_date?: string | null;
     date: string;
     payment_method?: number | null;
+    payment_source?: number | null;
+    transaction_reference?: string | null;
     pending_amount: number;
     repayments: Array<{ id: number; label: string; amount: number; remarks: string; date: string }>;
 };
@@ -43,6 +48,8 @@ export type Repayment = {
     remarks: string;
     date: string;
     payment_method?: number | null;
+    payment_source?: number | null;
+    transaction_reference?: string | null;
 };
 
 // DRF-style pagination shape
@@ -86,11 +93,15 @@ const baseQuery = fetchBaseQuery({
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint
-        if (endpoint === 'login' || endpoint === 'signUp') {
+        if (endpoint === 'login' || endpoint === 'signUp' || endpoint === 'forgotPassword' || endpoint === 'resetPassword') {
             return headers
         }
         const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        if (token) headers.set("Authorization", `Token ${token}`);
+        if (token) {
+            // Support both DRF Token and JWT Bearer tokens
+            const scheme = token.includes('.') ? 'Bearer' : 'Token'
+            headers.set("Authorization", `${scheme} ${token}`);
+        }
         return headers;
     },
     responseHandler: async (response) => {
@@ -163,6 +174,7 @@ export const payFirstApi = createApi({
         "Transactions",
         "Repayments",
         "PaymentMethods",
+        "PaymentSources",
     ],
     endpoints: (builder) => ({
         // Auth
@@ -219,6 +231,17 @@ export const payFirstApi = createApi({
             },
             providesTags: ["User"],
         }),
+        // Forgot/reset password
+        forgotPassword: builder.mutation<ApiSuccess<unknown> | ApiFail, { username: string }>(
+            {
+                query: (body) => ({ url: "/forgot_password", method: "POST", body }),
+            }
+        ),
+        resetPassword: builder.mutation<ApiSuccess<unknown> | ApiFail, { token: string; password: string }>(
+            {
+                query: (body) => ({ url: "/reset_password", method: "POST", body }),
+            }
+        ),
         updateProfile: builder.mutation<
             ApiSuccess<Profile> | ApiFail,
             Partial<Pick<Profile, 'first_name' | 'last_name' | 'user'>>
@@ -301,7 +324,7 @@ export const payFirstApi = createApi({
             query: (params) => params ? ({ url: "/user/contact/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/contact/" }),
             providesTags: ["Contacts"],
         }),
-        createContact: builder.mutation<ApiSuccess<Contact> | ApiFail, { name: string; groups: number[]; data?: Record<string, unknown> }>({
+        createContact: builder.mutation<ApiSuccess<Contact> | ApiFail, { name?: string; groups?: number[]; data?: Record<string, unknown> } | FormData>({
             query: (body) => ({ url: "/user/contact/", method: "POST", body }),
             invalidatesTags: ["Contacts"],
         }),
@@ -309,7 +332,7 @@ export const payFirstApi = createApi({
             query: (id) => ({ url: `/user/contact/${id}/` }),
             providesTags: ["Contacts"],
         }),
-        updateContact: builder.mutation<ApiSuccess<Contact> | ApiFail, { id: number; changes: Partial<Omit<Contact, 'id'>> }>({
+        updateContact: builder.mutation<ApiSuccess<Contact> | ApiFail, { id: number; changes: Partial<Omit<Contact, 'id'>> | FormData }>({
             query: ({ id, changes }) => ({ url: `/user/contact/${id}/`, method: "PATCH", body: changes }),
             invalidatesTags: ["Contacts"],
             // With server-side pagination, rely on invalidation instead of patching unknown pages
@@ -355,7 +378,7 @@ export const payFirstApi = createApi({
             query: (params) => params ? ({ url: "/user/repayment/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/repayment/" }),
             providesTags: ["Repayments"],
         }),
-        createRepayment: builder.mutation<ApiSuccess<Repayment> | ApiFail, Omit<Repayment, "id" | "date"> & { date?: string }>({
+        createRepayment: builder.mutation<ApiSuccess<Repayment> | ApiFail, Omit<Repayment, "id" | "date"> & { date?: string } | FormData>({
             query: (body) => ({ url: "/user/repayment/", method: "POST", body }),
             invalidatesTags: ["Repayments", "Transactions"],
         }),
@@ -363,7 +386,7 @@ export const payFirstApi = createApi({
             query: (id) => ({ url: `/user/repayment/${id}/` }),
             providesTags: ["Repayments"],
         }),
-        updateRepayment: builder.mutation<ApiSuccess<Repayment> | ApiFail, { id: number; changes: Partial<Omit<Repayment, 'id'>> }>({
+        updateRepayment: builder.mutation<ApiSuccess<Repayment> | ApiFail, { id: number; changes: Partial<Omit<Repayment, 'id'>> | FormData }>({
             query: ({ id, changes }) => ({ url: `/user/repayment/${id}/`, method: "PATCH", body: changes }),
             invalidatesTags: ["Repayments", "Transactions"],
             // Invalidate instead of patching paginated caches
@@ -400,6 +423,63 @@ export const payFirstApi = createApi({
                 invalidatesTags: ["PaymentMethods"],
             }
         ),
+        // Payment Sources
+        listPaymentSources: builder.query<
+            ApiSuccess<Paginated<PaymentSource> | PaymentSource[]> | Paginated<PaymentSource> | ApiFail,
+            ListParams | void
+        >({
+            query: (params) => params ? ({ url: "/user/payment_source/", params: params as Record<string, string | number | boolean | undefined> }) : ({ url: "/user/payment_source/" }),
+            providesTags: ["PaymentSources"],
+        }),
+        createPaymentSource: builder.mutation<ApiSuccess<PaymentSource> | ApiFail, { label: string }>(
+            {
+                query: (body) => ({ url: "/user/payment_source/", method: "POST", body }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
+        updatePaymentSource: builder.mutation<ApiSuccess<PaymentSource> | ApiFail, { id: number; changes: Partial<Omit<PaymentSource, 'id'>> }>(
+            {
+                query: ({ id, changes }) => ({ url: `/user/payment_source/${id}/`, method: "PATCH", body: changes }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
+        deletePaymentSource: builder.mutation<ApiSuccess<unknown> | ApiFail, number>(
+            {
+                query: (id) => ({ url: `/user/payment_source/${id}/`, method: "DELETE" }),
+                invalidatesTags: ["PaymentSources"],
+            }
+        ),
+
+        // Import Contacts (CSV)
+        importContacts: builder.mutation<ApiSuccess<unknown> | ApiFail | unknown, { file: File; _type?: 'google' }>(
+            {
+                query: ({ file, _type = 'google' }) => {
+                    const fd = new FormData()
+                    fd.append('file', file)
+                    fd.append('_type', _type)
+                    return { url: "/user/import_contacts", method: "POST", body: fd }
+                },
+                invalidatesTags: ["Contacts"],
+            }
+        ),
+
+        // Summary API
+        summary: builder.query<SummaryItem[] | ApiSuccess<SummaryItem[]> | ApiFail, void>({
+            query: () => ({ url: "/user/summary" }),
+        }),
+
+        // Meta API
+        meta: builder.query<ModuleInfo[] | ApiSuccess<ModuleInfo[]> | ApiFail, void>({
+            query: () => ({ url: "/meta" }),
+        }),
+
+        // Email Verify / Resend
+        verifyEmail: builder.mutation<ApiSuccess<unknown> | ApiFail | unknown, { _id: string; token: string }>(
+            { query: (body) => ({ url: "/verify-email", method: "POST", body }) }
+        ),
+        resendEmail: builder.mutation<ApiSuccess<unknown> | ApiFail | unknown, { email: string }>(
+            { query: (body) => ({ url: "/resend_email", method: "POST", body }) }
+        ),
     }),
 });
 
@@ -410,6 +490,8 @@ export const {
     useProfileQuery,
     useUpdateProfileMutation,
     useChangePasswordMutation,
+    useForgotPasswordMutation,
+    useResetPasswordMutation,
     useListContactGroupsQuery,
     useCreateContactGroupMutation,
     useGetContactGroupQuery,
@@ -434,4 +516,13 @@ export const {
     useCreatePaymentMethodMutation,
     useUpdatePaymentMethodMutation,
     useDeletePaymentMethodMutation,
+    useListPaymentSourcesQuery: useListPaymentSourcesQuery,
+    useCreatePaymentSourceMutation: useCreatePaymentSourceMutation,
+    useUpdatePaymentSourceMutation: useUpdatePaymentSourceMutation,
+    useDeletePaymentSourceMutation: useDeletePaymentSourceMutation,
+    useImportContactsMutation,
+    useSummaryQuery,
+    useMetaQuery,
+    useVerifyEmailMutation,
+    useResendEmailMutation,
 } = payFirstApi;

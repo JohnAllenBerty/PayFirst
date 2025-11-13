@@ -7,6 +7,8 @@ const ContactPage = lazy(() => import("@/components/contact-page"))
 const TransactionsPage = lazy(() => import("@/pages/transactions"))
 const RepaymentsPage = lazy(() => import("@/pages/repayments"))
 const PaymentMethodsPage = lazy(() => import("@/pages/payment-methods"))
+const PaymentSourcesPage = lazy(() => import("@/pages/payment-sources"))
+// Public auth pages are registered in App router, not here
 const ProfilePage = lazy(() => import("@/pages/profile"))
 const ChangePasswordPage = lazy(() => import("@/pages/change-password"))
 
@@ -34,6 +36,10 @@ export const childrenRoutes: RouteObject[] = [
     {
         path: "/payment-methods",
         element: React.createElement(PaymentMethodsPage)
+    },
+    {
+        path: "/payment-sources",
+        element: React.createElement(PaymentSourcesPage)
     },
     {
         path: "/profile",

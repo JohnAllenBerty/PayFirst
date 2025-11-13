@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { useListContactsQuery, useCreateContactMutation, useListContactGroupsQuery, useUpdateContactMutation, useDeleteContactMutation, type ApiSuccess, type ApiFail, type Paginated, type Contact, type ContactGroup } from '@/store/api/payFirstApi'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useListContactsQuery, useCreateContactMutation, useListContactGroupsQuery, useUpdateContactMutation, useDeleteContactMutation, useImportContactsMutation, type ApiSuccess, type ApiFail, type Paginated, type Contact, type ContactGroup } from '@/store/api/payFirstApi'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,7 @@ const ContactPage = () => {
     const [dataField, setDataField] = useState('')
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
+    const [picture, setPicture] = useState<File | null>(null)
 
     // typing in the search box does not trigger API; searching occurs on Enter or button click
     const [viewingId, setViewingId] = useState<number | null>(null)
@@ -44,6 +45,11 @@ const ContactPage = () => {
     const [editName, setEditName] = useState('')
     const [editGroups, setEditGroups] = useState<number[]>([])
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+    const [editPicture, setEditPicture] = useState<File | null>(null)
+    const [importOpen, setImportOpen] = useState(false)
+    const [importFile, setImportFile] = useState<File | null>(null)
+    const [importType, setImportType] = useState<'google'>('google')
+    const [importContacts, { isLoading: importing }] = useImportContactsMutation()
 
     const groups = useMemo(() => (groupsRes && typeof groupsRes !== 'string' && (groupsRes as ApiSuccess<ContactGroup[]>)?.status ? (groupsRes as ApiSuccess<ContactGroup[]>)?.data : []), [groupsRes])
     const contactsData = useMemo(() => {
@@ -88,10 +94,16 @@ const ContactPage = () => {
             }
         }
         try {
-            const res = await createContact({ name: name.trim(), groups: selectedGroups, data: parsedData }).unwrap()
+            const fd = new FormData()
+            fd.append('name', name.trim())
+            selectedGroups.forEach(g => fd.append('groups', String(g)))
+            if (Object.keys(parsedData).length) fd.append('data', JSON.stringify(parsedData))
+            if (picture) fd.append('picture', picture)
+            const res = await createContact(fd as unknown as { name?: string }).unwrap()
             setName('')
             setSelectedGroups([])
             setDataField('')
+            setPicture(null)
             toast.success(extractSuccessMessage(res, 'Contact created'))
             return true
         } catch (e) {
@@ -139,6 +151,19 @@ const ContactPage = () => {
     }, [contacts])
 
     const ungroupedContacts = useMemo(() => contacts.filter((c) => !c.groups || c.groups.length === 0), [contacts])
+
+    // Zero-results toast when filters applied
+    const lastToastSig = useRef<string>('')
+    useEffect(() => {
+        const active = Boolean(filters.name && filters.name.trim())
+        if (!active) return
+        const total = totalContacts
+        const sig = `${filters.name}`
+        if (!loadingContacts && total === 0 && lastToastSig.current !== sig) {
+            lastToastSig.current = sig
+            toast.info('No contacts match your filter. Adjust or clear filters to see results.')
+        }
+    }, [filters.name, totalContacts, loadingContacts])
 
     type TreeGroupNodeProps = {
         node: GroupTreeNode
@@ -225,7 +250,9 @@ const ContactPage = () => {
                 </div>
             )}
             <div className="flex items-center justify-between">
-                <div />
+                <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>Import CSV</Button>
+                </div>
                 <Button size="sm" onClick={() => { setCreateOpen(true); setFormError(null) }}>New Contact</Button>
             </div>
 
@@ -447,15 +474,20 @@ const ContactPage = () => {
             {/* Create modal */}
             {createOpen && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateOpen(false)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="new-contact-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">New contact</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
+                            <h3 id="new-contact-title" className="font-semibold">New contact</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setCreateOpen(false)}>Close</button>
                         </div>
                         <form onSubmit={async (e) => { const ok = await onSubmit(e); if (ok) setCreateOpen(false) }} className="grid gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="name">Name</Label>
                                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="picture">Picture</Label>
+                                <input id="picture" type="file" accept="image/*" onChange={(e) => setPicture(e.target.files?.[0] || null)} className="h-9 rounded-md border bg-background px-2 text-sm" />
+                                <span className="text-xs text-muted-foreground">Optional. JPG/PNG recommended.</span>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="data">Data (JSON)</Label>
@@ -498,10 +530,10 @@ const ContactPage = () => {
             {/* View sheet */}
             {viewingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setViewingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="view-contact-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Contact details</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
+                            <h3 id="view-contact-title" className="font-semibold">Contact details</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setViewingId(null)}>Close</button>
                         </div>
                         {(() => {
                             const contact = contacts.find(x => x.id === viewingId)
@@ -511,10 +543,6 @@ const ContactPage = () => {
                                 <div className="text-sm space-y-2">
                                     <div><span className="text-muted-foreground">Name:</span> {contact.name}</div>
                                     <div><span className="text-muted-foreground">Groups:</span> {groupNames.length ? groupNames.join(', ') : '—'}</div>
-                                    <div>
-                                        <div className="text-muted-foreground">Data:</div>
-                                        <pre className="mt-1 max-h-60 overflow-auto rounded bg-muted p-2 text-xs">{JSON.stringify(contact.data ?? {}, null, 2)}</pre>
-                                    </div>
                                 </div>
                             )
                         })()}
@@ -525,10 +553,10 @@ const ContactPage = () => {
             {/* Edit sheet */}
             {editingId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setEditingId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="edit-contact-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold">Edit contact</h3>
-                            <button className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
+                            <h3 id="edit-contact-title" className="font-semibold">Edit contact</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setEditingId(null)}>Close</button>
                         </div>
                         <form
                             className="grid gap-3"
@@ -545,7 +573,12 @@ const ContactPage = () => {
                                 }
                                 try {
                                     const id = editingId!
-                                    const res = await updateContact({ id, changes: { name: editName.trim(), groups: editGroups, data: parsedData } }).unwrap()
+                                    const fd = new FormData()
+                                    fd.append('name', editName.trim())
+                                    editGroups.forEach(g => fd.append('groups', String(g)))
+                                    if (Object.keys(parsedData).length) fd.append('data', JSON.stringify(parsedData))
+                                    if (editPicture) fd.append('picture', editPicture)
+                                    const res = await updateContact({ id, changes: fd }).unwrap()
                                     toast.success(extractSuccessMessage(res, 'Contact updated'))
                                     setEditingId(null)
                                 } catch (e) {
@@ -556,6 +589,14 @@ const ContactPage = () => {
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-name">Name</Label>
                                 <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-picture">Picture</Label>
+                                <input id="edit-picture" type="file" accept="image/*" onChange={(e) => {
+                                    const f = e.target.files?.[0] || null
+                                    setEditPicture(f)
+                                }} className="h-9 rounded-md border bg-background px-2 text-sm" />
+                                <span className="text-xs text-muted-foreground">Optional. Upload to replace existing picture.</span>
                             </div>
                             <div className="grid gap-2">
                                 <Label>Groups</Label>
@@ -591,8 +632,8 @@ const ContactPage = () => {
             {/* Delete confirm */}
             {confirmDeleteId !== null && (
                 <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setConfirmDeleteId(null)}>
-                    <div className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="font-semibold mb-2">Delete contact</h3>
+                    <div role="dialog" aria-modal="true" aria-labelledby="delete-contact-title" className="bg-background rounded-md p-4 w-[420px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <h3 id="delete-contact-title" className="font-semibold mb-2">Delete contact</h3>
                         <p className="text-sm text-muted-foreground mb-4">This action cannot be undone.</p>
                         <div className="flex items-center justify-end gap-2">
                             <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
@@ -607,6 +648,50 @@ const ContactPage = () => {
                                 }
                             }}>Delete</Button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Import CSV modal */}
+            {importOpen && (
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setImportOpen(false)}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="import-contacts-title" className="bg-background rounded-md p-4 w-[520px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 id="import-contacts-title" className="font-semibold">Import contacts from CSV</h3>
+                            <button aria-label="Close dialog" className="text-sm text-muted-foreground" onClick={() => setImportOpen(false)}>Close</button>
+                        </div>
+                        <form className="grid gap-3" onSubmit={async (e) => {
+                            e.preventDefault()
+                            if (!importFile) {
+                                toast.error('Please choose a CSV file')
+                                return
+                            }
+                            try {
+                                const res = await importContacts({ file: importFile, _type: importType }).unwrap()
+                                toast.success(extractSuccessMessage(res, 'Import started'))
+                                setImportOpen(false)
+                                setImportFile(null)
+                                setRefresh(c => c + 1)
+                            } catch (e) {
+                                toast.error(extractErrorMessage(e))
+                            }
+                        }}>
+                            <div className="grid gap-2">
+                                <Label htmlFor="import-file">CSV file</Label>
+                                <input id="import-file" type="file" accept=".csv,text/csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="h-9 rounded-md border bg-background px-2 text-sm" />
+                                <span className="text-xs text-muted-foreground">Upload a CSV exported from Google Contacts.</span>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="import-type">Type</Label>
+                                <select id="import-type" className="h-9 rounded-md border bg-background px-2 text-sm" value={importType} onChange={(e) => setImportType(e.target.value as 'google')}>
+                                    <option value="google">Google</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={importing}>{importing ? 'Importing…' : 'Import'}</Button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

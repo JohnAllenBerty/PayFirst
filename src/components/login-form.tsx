@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { ApiSuccess, AuthToken } from '@/store/api/payFirstApi'
-import { useApiLoginMutation } from '@/store/api/payFirstApi'
+import { useApiLoginMutation, useResendEmailMutation } from '@/store/api/payFirstApi'
+import { toast } from 'react-toastify'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 export function LoginForm({
@@ -12,11 +13,13 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<'form'>) {
   const [login, { isLoading, isError }] = useApiLoginMutation()
+  const [resendEmail, { isLoading: resending }] = useResendEmailMutation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [remember, setRemember] = useState(true)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [loginError, setLoginError] = useState<{ code?: string; message?: string } | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/'
@@ -40,7 +43,8 @@ export function LoginForm({
     if (Object.keys(nextErrors).length) return
 
     if (!errors.email && !errors.password) {
-  login({ username: email, password, remember })
+      setLoginError(null)
+      login({ username: email, password, remember })
         .unwrap()
         .then((res) => {
           // Only navigate after a successful response with a token
@@ -50,8 +54,23 @@ export function LoginForm({
             navigate(from, { replace: true })
           }
         })
-        .catch(() => {
-          // error handled by isError and message below
+        .catch((err) => {
+          // Try to extract structured error to detect unverified email
+          try {
+            const eObj: unknown = err
+            let data: unknown = eObj
+            if (eObj && typeof eObj === 'object' && 'data' in (eObj as Record<string, unknown>)) {
+              data = (eObj as { data: unknown }).data
+            }
+            const obj = (typeof data === 'object' && data) ? (data as Record<string, unknown>) : {}
+            const code = typeof obj.code === 'string' ? obj.code : undefined
+            const message = typeof obj.message === 'string' && obj.message !== 'fail'
+              ? obj.message
+              : (typeof obj.error === 'string' ? obj.error : 'Login failed')
+            setLoginError({ code, message })
+          } catch {
+            setLoginError({ message: 'Login failed' })
+          }
         })
     }
   }
@@ -86,12 +105,12 @@ export function LoginForm({
         <div className="grid gap-3">
           <div className="flex items-center">
             <Label htmlFor="password">Password</Label>
-            <a
-              href="#"
+            <Link
+              to="/forgot-password"
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
               Forgot your password?
-            </a>
+            </Link>
           </div>
           <Input
             id="password"
@@ -115,10 +134,33 @@ export function LoginForm({
               {errors.password}
             </span>
           )}
-          {isError && (
-            <span className="text-sm text-red-600">
-              Invalid email or password
-            </span>
+          {isError && !loginError && (
+            <span className="text-sm text-red-600">Invalid email or password</span>
+          )}
+          {loginError && (
+            <div className="text-sm text-red-600 space-y-2">
+              <div>{loginError.message || 'Login failed'}</div>
+              {loginError.code === 'email_not_verified' && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="h-8 rounded-md border px-2 text-xs"
+                    disabled={resending || !email.includes('@')}
+                    onClick={async () => {
+                      try {
+                        await resendEmail({ email }).unwrap()
+                        toast.success('Verification email sent')
+                      } catch {
+                        toast.error('Unable to send verification email')
+                      }
+                    }}
+                  >
+                    {resending ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                  <Link to="/verify-email" className="underline">Enter verification code</Link>
+                </div>
+              )}
+            </div>
           )}
         </div>
   <Button type="submit" disabled={isLoading}>{isLoading ? 'Logging in…' : 'Login'}</Button>
