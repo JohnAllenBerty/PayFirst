@@ -119,9 +119,13 @@ const API_BASE = (() => {
         const host = window.location.hostname
         if (host.endsWith('github.io')) {
             if (!resolved || resolved === '/api') {
+                // User requested http instead of https. NOTE: Browsers will block this as mixed content
+                // when the page itself is served over HTTPS. Recommended: enable HTTPS on backend.
                 resolved = 'http://34.42.85.70'
             }
         }
+        // Debug log once (non-fatal) to help verify at runtime.
+        try { console.info('[payFirstApi] API_BASE resolved to', resolved || '/api') } catch { /* ignore */ }
     }
     return resolved || '/api'
 })();
