@@ -102,18 +102,28 @@ const API_BASE = (() => {
     // import.meta.env is defined in Vite builds/runtime
     // Prefer VITE_API_BASE, then VITE_API_TARGET; else fall back to the dev proxy path "/api"
     // Normalize by trimming trailing slashes
+    let resolved: string | undefined
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const env = (import.meta as any)?.env || {};
-        // Use explicit API envs, not the Vite asset base (VITE_BASE).
-        const raw = env.VITE_API_BASE || env.VITE_API_TARGET;
+        const env = (import.meta as any)?.env || {}
+        const raw = env.VITE_API_BASE || env.VITE_API_TARGET
         if (typeof raw === 'string' && raw.length > 0) {
-            return String(raw).replace(/\/+$/, '');
+            resolved = String(raw).replace(/\/+$/, '')
         }
     } catch {
         // noop: not running in Vite context (e.g., tests)
     }
-    return '/api';
+    // Runtime fallback: if deployed on GitHub Pages (*.github.io) and we somehow
+    // ended up with the dev proxy path, force an absolute origin.
+    if (typeof window !== 'undefined') {
+        const host = window.location.hostname
+        if (host.endsWith('github.io')) {
+            if (!resolved || resolved === '/api') {
+                resolved = 'https://34.42.85.70'
+            }
+        }
+    }
+    return resolved || '/api'
 })();
 
 const baseQuery = fetchBaseQuery({
