@@ -88,8 +88,28 @@ async function handle500Response() {
     toast.error('Internal Server Error');
 }
 
+// Resolve the API base URL.
+// Priority:
+// 1. Explicit env VITE_API_BASE
+// 2. Fallback to VITE_API_TARGET
+// 3. GitHub Pages runtime fallback (no dev proxy available)
+// 4. Default to '/api' (dev proxy path)
+function resolveApiBase() {
+    const envBase = (import.meta as any).env?.VITE_API_BASE || (import.meta as any).env?.VITE_API_TARGET;
+    if (envBase) return String(envBase).replace(/\/$/, '');
+    if (typeof window !== 'undefined') {
+        const host = window.location.host;
+        // When served from GitHub Pages (static) there is no /api proxy; use absolute backend.
+        if (host.endsWith('github.io')) {
+            // User requested switching https -> http (may trigger Mixed Content in browsers).
+            return 'http://34.42.85.70';
+        }
+    }
+    return '/api';
+}
+
 const baseQuery = fetchBaseQuery({
-    baseUrl: '/api', // Vite proxy -> Django at http://localhost:8000
+    baseUrl: resolveApiBase(), // dynamic resolution
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint
