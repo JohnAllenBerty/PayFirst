@@ -200,9 +200,9 @@ const Dashboard = () => {
                         <CardTitle className="text-base">Quick actions</CardTitle>
                     </CardHeader>
                     <CardContent className="flex gap-2">
-                        <Button asChild><a href="/transactions">Transactions</a></Button>
-                        <Button asChild variant="outline"><a href="/repayments">Repayments</a></Button>
-                        <Button asChild variant="outline"><a href="/contacts">Contacts</a></Button>
+                        <Button asChild><a href="transactions">Transactions</a></Button>
+                        <Button asChild variant="outline"><a href="repayments">Repayments</a></Button>
+                        <Button asChild variant="outline"><a href="contact">Contacts</a></Button>
                     </CardContent>
                 </Card>
             </div>
