@@ -110,6 +110,15 @@ const API_BASE = (() => {
         if (typeof raw === 'string' && raw.length > 0) {
             resolved = String(raw).replace(/\/+$/, '')
         }
+        // If page is HTTPS but resolved base is HTTP, allow an HTTPS proxy override
+        if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+            if (resolved && resolved.startsWith('http://')) {
+                const proxy = env.VITE_API_HTTPS_PROXY
+                if (typeof proxy === 'string' && proxy.length > 0) {
+                    resolved = String(proxy).replace(/\/+$/, '')
+                }
+            }
+        }
     } catch {
         // noop: not running in Vite context (e.g., tests)
     }
