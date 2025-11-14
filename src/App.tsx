@@ -3,7 +3,7 @@ import LoginPage from '@/pages/login-page';
 import RootLayout from '@/pages/root-layout';
 import SignUpPage from '@/pages/sign-up-page';
 import { childrenRoutes } from '@/routes/routes';
-import PrivateRoute from '@/routes/PrivateRoute';
+// PrivateRoute no longer wraps the root; we inline a Gate component instead.
 import { Suspense } from 'react';
 import { Provider } from 'react-redux';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
@@ -25,15 +25,23 @@ const BASENAME = (() => {
   }
 })()
 
-// Define public auth routes explicitly and guard app routes with PrivateRoute
+function hasToken(): boolean {
+  if (typeof window === 'undefined') return false
+  const t = localStorage.getItem('token') || sessionStorage.getItem('token')
+  return !!t && t !== 'undefined' && t !== 'null' && t.trim() !== ''
+}
+
+// Gate decides what to render at root: Dashboard (RootLayout) if token, else LoginPage.
+function Gate() {
+  return hasToken() ? <RootLayout /> : <LoginPage />
+}
+
+// Root route uses Gate so "/" => Dashboard when authenticated, Login when not.
+// Child routes remain protected implicitly because Gate won't render an <Outlet /> when unauthenticated.
 const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <PrivateRoute>
-        <RootLayout />
-      </PrivateRoute>
-    ),
+    element: <Gate />,
     errorElement: <ErrorPage />,
     children: childrenRoutes,
   },
