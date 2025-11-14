@@ -119,7 +119,7 @@ const API_BASE = (() => {
         const host = window.location.hostname
         if (host.endsWith('github.io')) {
             if (!resolved || resolved === '/api') {
-                resolved = 'https://34.42.85.70'
+                resolved = 'http://34.42.85.70'
             }
         }
     }
