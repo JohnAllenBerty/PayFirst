@@ -23,6 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useApiLogoutMutation } from "@/store/api/payFirstApi"
+import { useNavigate } from "react-router-dom"
 
 export function NavUser({
   user,
@@ -35,6 +36,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const [logout] = useApiLogoutMutation()
+  const navigate = useNavigate()
 
 
   return (
@@ -77,7 +79,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => { window.location.href = '/profile' }}>
+              <DropdownMenuItem onClick={() => { navigate('/profile') }}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>
@@ -85,7 +87,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => {
               logout().then(() => {
-                window.location.href = '/';
+                navigate('/', { replace: true })
               });
             }}>
               <LogOut />

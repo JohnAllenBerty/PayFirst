@@ -3,7 +3,7 @@ import LoginPage from '@/pages/login-page';
 import RootLayout from '@/pages/root-layout';
 import SignUpPage from '@/pages/sign-up-page';
 import { childrenRoutes } from '@/routes/routes';
-import PrivateRoute from '@/routes/PrivateRoute';
+// PrivateRoute no longer wraps the root; we inline a Gate component instead.
 import { Suspense } from 'react';
 import { Provider } from 'react-redux';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
@@ -14,15 +14,34 @@ import ResetPasswordPage from './pages/reset-password';
 import VerifyEmailPage from './pages/verify-email';
 import { MetaProvider } from './context/MetaContext';
 
-// Define public auth routes explicitly and guard app routes with PrivateRoute
+// Determine basename from Vite's BASE_URL (e.g., "/PayFirst/") and trim trailing slash for React Router
+const BASENAME = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const base: string = ((import.meta as any)?.env?.BASE_URL) || '/'
+    return base.endsWith('/') ? base.slice(0, -1) : base
+  } catch {
+    return ''
+  }
+})()
+
+function hasToken(): boolean {
+  if (typeof window === 'undefined') return false
+  const t = localStorage.getItem('token') || sessionStorage.getItem('token')
+  return !!t && t !== 'undefined' && t !== 'null' && t.trim() !== ''
+}
+
+// Gate decides what to render at root: Dashboard (RootLayout) if token, else LoginPage.
+function Gate() {
+  return hasToken() ? <RootLayout /> : <LoginPage />
+}
+
+// Root route uses Gate so "/" => Dashboard when authenticated, Login when not.
+// Child routes remain protected implicitly because Gate won't render an <Outlet /> when unauthenticated.
 const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <PrivateRoute>
-        <RootLayout />
-      </PrivateRoute>
-    ),
+    element: <Gate />,
     errorElement: <ErrorPage />,
     children: childrenRoutes,
   },
@@ -31,7 +50,7 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
   { path: '/verify-email', element: <VerifyEmailPage /> },
-]);
+], { basename: BASENAME });
 
 export default function App() {
   return (

@@ -7,6 +7,9 @@ import { defineConfig, loadEnv } from "vite"
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "")
   const target = env.VITE_API_TARGET || "http://localhost:8000/"
+  // Base path for assets. For GitHub Pages project sites, set to "/<repo-name>/"
+  // e.g. VITE_BASE="/PayFirst/" so built assets resolve under the project path.
+  const base = env.VITE_BASE || "/PayFirst/"
   // If target already includes "/api" in its path, keep the current rewrite (strip "/api")
   // so that "/api/foo" -> target"/api" + "foo". Otherwise, allow opting out of rewrite
   // via VITE_API_PRESERVE_PREFIX=true to forward "/api/*" as-is to the backend.
@@ -25,6 +28,7 @@ export default defineConfig(({ mode }) => {
     rewrite = undefined
   }
   return {
+    base,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

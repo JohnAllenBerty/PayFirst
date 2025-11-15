@@ -73,10 +73,16 @@ export type ListParams = {
 async function handle401Response() {
     // Redirect to login on unauthorized, but avoid bouncing when already on login/sign-up routes
     if (typeof window !== 'undefined') {
+        // Respect app basename (e.g., "/PayFirst") for GitHub Pages
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const base: string = (() => { try { return ((import.meta as any)?.env?.BASE_URL) || '/' } catch { return '/' } })()
+        const prefix = base.replace(/\/$/, '') // "/PayFirst"
         const path = window.location.pathname || ''
-        const onAuthRoute = path.startsWith('/login') || path.startsWith('/sign-up')
+        // Strip basename for route checks
+        const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
+        const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
         if (!onAuthRoute) {
-            window.location.href = '/login'
+            window.location.href = `${prefix}/login`
         }
     }
 }
@@ -88,28 +94,53 @@ async function handle500Response() {
     toast.error('Internal Server Error');
 }
 
-// Resolve the API base URL.
-// Priority:
-// 1. Explicit env VITE_API_BASE
-// 2. Fallback to VITE_API_TARGET
-// 3. GitHub Pages runtime fallback (no dev proxy available)
-// 4. Default to '/api' (dev proxy path)
-function resolveApiBase() {
-    const envBase = (import.meta as any).env?.VITE_API_BASE || (import.meta as any).env?.VITE_API_TARGET;
-    if (envBase) return String(envBase).replace(/\/$/, '');
-    if (typeof window !== 'undefined') {
-        const host = window.location.host;
-        // When served from GitHub Pages (static) there is no /api proxy; use absolute backend.
-        if (host.endsWith('github.io')) {
-            // User requested switching https -> http (may trigger Mixed Content in browsers).
-            return 'http://34.42.85.70';
+// Resolve API base URL
+// - In development, Vite dev server proxies "/api" to VITE_API_TARGET
+// - In production (e.g., GitHub Pages), we must call the backend directly using an absolute URL
+//   provided by VITE_API_BASE or VITE_API_TARGET at build time.
+const API_BASE = (() => {
+    // import.meta.env is defined in Vite builds/runtime
+    // Prefer VITE_API_BASE, then VITE_API_TARGET; else fall back to the dev proxy path "/api"
+    // Normalize by trimming trailing slashes
+    let resolved: string | undefined
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const env = (import.meta as any)?.env || {}
+        const raw = env.VITE_API_BASE || env.VITE_API_TARGET
+        if (typeof raw === 'string' && raw.length > 0) {
+            resolved = String(raw).replace(/\/+$/, '')
         }
+        // If page is HTTPS but resolved base is HTTP, allow an HTTPS proxy override
+        if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+            if (resolved && resolved.startsWith('http://')) {
+                const proxy = env.VITE_API_HTTPS_PROXY
+                if (typeof proxy === 'string' && proxy.length > 0) {
+                    resolved = String(proxy).replace(/\/+$/, '')
+                }
+            }
+        }
+    } catch {
+        // noop: not running in Vite context (e.g., tests)
     }
-    return '/api';
-}
+    // Runtime fallback: if deployed on GitHub Pages (*.github.io) and we somehow
+    // ended up with the dev proxy path, force an absolute origin.
+    if (typeof window !== 'undefined') {
+        const host = window.location.hostname
+        if (host.endsWith('github.io')) {
+            if (!resolved || resolved === '/api') {
+                // User requested http instead of https. NOTE: Browsers will block this as mixed content
+                // when the page itself is served over HTTPS. Recommended: enable HTTPS on backend.
+                resolved = "https://api.paybuddy.site"
+            }
+        }
+        // Debug log once (non-fatal) to help verify at runtime.
+        try { console.info('[payFirstApi] API_BASE resolved to', resolved || '/api') } catch { /* ignore */ }
+    }
+    return resolved || '/api'
+})();
 
 const baseQuery = fetchBaseQuery({
-    baseUrl: resolveApiBase(), // dynamic resolution
+    baseUrl: API_BASE, // Dev: "/api" (proxied). Prod: absolute origin (e.g., https://api.example.com)
     prepareHeaders: (headers, api) => {
         // Do not send Authorization for public auth endpoints
         const endpoint = (api as unknown as { endpoint?: string }).endpoint

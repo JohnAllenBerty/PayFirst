@@ -1,0 +1,10 @@
+name = "payfirst-proxy"
+main = "src/worker.ts"
+compatibility_date = "2024-11-01"
+
+[vars]
+# Default backend origin (HTTP). You can override at deploy time.
+BACKEND_ORIGIN = "http://34.42.85.70"
+
+# Optional: restrict routes and custom domain later if desired.
+# routes = [ "your-domain.example.com/*" ]
