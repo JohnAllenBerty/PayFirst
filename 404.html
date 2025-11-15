@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting…</title>
+    <meta http-equiv="refresh" content="0; url=/PayFirst/" />
+    <script>
+      (function() {
+        // GitHub Pages SPA fallback: redirect unknown routes to index with encoded path
+        var l = window.location;
+        // Project base path (repo name). Update if repo name changes.
+        var base = '/PayFirst/';
+        // Ensure base ends with a single slash
+        base = base.replace(/\/?$/, '/');
+        // Compute path relative to base, ensuring a leading slash
+        var path = l.pathname;
+        try {
+          // Normalize to always keep a leading slash for the app route
+          if (path.toLowerCase().startsWith(base.toLowerCase())) {
+            path = path.slice(base.length - 1);
+          }
+        } catch (_) {}
+        var encoded = encodeURIComponent(path + l.search + l.hash);
+        l.replace(base + 'index.html?p=' + encoded);
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecting…
+  </body>
+  </html>

@@ -8,6 +8,24 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If redirected from 404.html with ?p=<encodedPath>, rewrite the URL back to the intended route
+      (function() {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          var p = params.get('p');
+          if (p) {
+            var decoded = decodeURIComponent(p);
+            // Compute the base from current path (e.g., /PayFirst/)
+            var path = window.location.pathname;
+            var base = path.substring(0, path.lastIndexOf('/') + 1);
+            // Join base and decoded route, avoiding duplicate slashes
+            var newUrl = base.replace(/\/$/, '/') + decoded.replace(/^\//, '');
+            window.history.replaceState(null, '', newUrl);
+          }
+        } catch (_) { /* no-op */ }
+      })();
+    </script>
     <!-- Vite will replace this with built asset references during production build -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
