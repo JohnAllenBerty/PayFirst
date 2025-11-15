@@ -81,8 +81,12 @@ async function handle401Response() {
         // Strip basename for route checks
         const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
         const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
+        // Prefer sending users to app root; Gate will render LoginPage if unauthenticated.
         if (!onAuthRoute) {
-            window.location.href = `${prefix}/login`
+            const target = `${prefix}/`
+            if (window.location.pathname !== target) {
+                window.location.href = target
+            }
         }
     }
 }
