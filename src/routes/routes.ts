@@ -18,7 +18,7 @@ export const childrenRoutes: RouteObject[] = [
         element: React.createElement(Dashboard)
     },
     {
-        path: "/PayFirst/contact",
+        path: "/contact",
         element: React.createElement(ContactPage)
     },
     {

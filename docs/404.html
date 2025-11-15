@@ -2,13 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/PayFirst/assets/vite-DcBtz0py.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
-    <script type="module" crossorigin src="/PayFirst/assets/index-DnKD0KXe.js"></script>
-    <link rel="stylesheet" crossorigin href="/PayFirst/assets/index-DDBKup2D.css">
+    <title>Redirecting…</title>
+    <script>
+      (function() {
+        // GitHub Pages SPA fallback: redirect unknown routes to index with encoded path
+        var l = window.location;
+        // Project base path (repo name). Update if repo name changes.
+        var base = '/PayFirst/';
+        // Ensure base ends with a single slash
+        base = base.replace(/\/?$/, '/');
+        // Compute path relative to base, ensuring a leading slash
+        var path = l.pathname;
+        try {
+          // Normalize to always keep a leading slash for the app route
+          if (path.toLowerCase().startsWith(base.toLowerCase())) {
+            path = path.slice(base.length - 1);
+          }
+        } catch (_) {}
+        var encoded = encodeURIComponent(path + l.search + l.hash);
+        // Redirect to the root with ?p= so index.html can rewrite the URL
+        l.replace(base + '?p=' + encoded);
+      })();
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    Redirecting…
   </body>
-</html>
+  </html>
