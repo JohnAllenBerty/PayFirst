@@ -559,6 +559,27 @@ const ContactPage = () => {
                             const groupNames = (contact.groups || []).map(id => groups.find(g => g.id === id)?.name || String(id))
                             return (
                                 <div className="text-sm space-y-2">
+                                    {(() => {
+                                        const pic = getContactPicture(contact)
+                                        return (
+                                            <div>
+                                                <span className="text-muted-foreground">Picture:</span>
+                                                <div className="pt-1">
+                                                    {pic ? (
+                                                        <img
+                                                            src={pic}
+                                                            alt={contact.name}
+                                                            className="h-20 w-20 rounded-md object-cover border"
+                                                        />
+                                                    ) : (
+                                                        <div className="h-20 w-20 rounded-md bg-muted flex items-center justify-center text-base font-medium border">
+                                                            {contact.name?.charAt(0)?.toUpperCase() || '?'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })()}
                                     <div><span className="text-muted-foreground">Name:</span> {contact.name}</div>
                                     <div><span className="text-muted-foreground">Groups:</span> {groupNames.length ? groupNames.join(', ') : '—'}</div>
                                 </div>
