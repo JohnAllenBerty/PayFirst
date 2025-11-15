@@ -35,7 +35,7 @@ const ContactPage = () => {
 
     const [name, setName] = useState('')
     const [selectedGroups, setSelectedGroups] = useState<number[]>([])
-    
+
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [picture, setPicture] = useState<File | null>(null)
@@ -47,6 +47,7 @@ const ContactPage = () => {
     const [editGroups, setEditGroups] = useState<number[]>([])
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
     const [editPicture, setEditPicture] = useState<File | null>(null)
+    const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null)
     const [importOpen, setImportOpen] = useState(false)
     const [importFile, setImportFile] = useState<File | null>(null)
     const [importType, setImportType] = useState<'google'>('google')
@@ -115,15 +116,15 @@ const ContactPage = () => {
         }
         const byId = new Map<number, GroupTreeNode>()
         const roots: GroupTreeNode[] = []
-        ;(groups as ContactGroup[]).forEach((g) => byId.set(g.id, { id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: [] }))
-        ;(groups as ContactGroup[]).forEach((g) => {
-            const node = byId.get(g.id)!
-            if (g.parent_group && byId.has(g.parent_group)) {
-                byId.get(g.parent_group)!.children.push(node)
-            } else {
-                roots.push(node)
-            }
-        })
+            ; (groups as ContactGroup[]).forEach((g) => byId.set(g.id, { id: g.id, name: g.name, parent_group: g.parent_group ?? null, children: [] }))
+            ; (groups as ContactGroup[]).forEach((g) => {
+                const node = byId.get(g.id)!
+                if (g.parent_group && byId.has(g.parent_group)) {
+                    byId.get(g.parent_group)!.children.push(node)
+                } else {
+                    roots.push(node)
+                }
+            })
         return roots
     }, [groups, hasNested])
 
@@ -227,6 +228,25 @@ const ContactPage = () => {
     }
 
     const { title } = useMetaPageTitle('/contact', 'Contacts • PayFirst')
+    // Helper: some backends return picture even if Contact type doesn't declare it
+    const getContactPicture = (c: Contact): string | undefined => (c as unknown as { picture?: string }).picture
+
+    // Edit preview image logic: show selected file preview or existing contact picture
+    useEffect(() => {
+        let objectUrl: string | null = null
+        if (editingId === null) {
+            setEditPreviewUrl(null)
+            setEditPicture(null)
+        } else if (editPicture) {
+            objectUrl = URL.createObjectURL(editPicture)
+            setEditPreviewUrl(objectUrl)
+        } else {
+            const contact = contacts.find(x => x.id === editingId)
+            const pic = contact ? (getContactPicture(contact) ?? null) : null
+            setEditPreviewUrl(pic)
+        }
+        return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+    }, [editingId, editPicture, contacts])
     return (
         <div className="space-y-6">
             <div>
@@ -282,172 +302,189 @@ const ContactPage = () => {
                     </div>
                 )}
                 {!treeView ? (
-                <div className="rounded-md border overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead
-                                    className="cursor-pointer select-none"
-                                    onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')}
-                                >
-                                    <span className="inline-flex items-center gap-1">
-                                        Name {ordering.includes('name') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}
-                                    </span>
-                                </TableHead>
-                                <TableHead>Groups</TableHead>
-                                <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
-                            </TableRow>
-                            {/* Filters row */}
-                            <TableRow>
-                                <TableCell>
-                                    <div className="relative">
-                                        <Input
-                                            value={query}
-                                            onChange={(e) => { setQuery(e.target.value) }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault()
-                                                    setFilters({ name: query.trim().toLowerCase() })
-                                                    setPage(1)
-                                                }
-                                            }}
-                                            placeholder="Filter name…"
-                                            className="pl-8 h-8"
-                                        />
-                                        <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
-                                    </div>
-                                </TableCell>
-                                <TableCell />
-                                <TableCell className="text-right pr-3">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 px-2"
-                                        disabled={fetchingContacts}
-                                        onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}
-                                    >
-                                        Apply
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loadingContacts ? (
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                        <TableCell className="text-right pr-3">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Skeleton className="h-8 w-16" />
-                                                <Skeleton className="h-8 w-16" />
-                                                <Skeleton className="h-8 w-16" />
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : contacts.length ? (
-                                contacts.map((c) => (
-                                    <TableRow key={c.id}>
-                                        <TableCell>
-                                            <div className="font-medium">{c.name}</div>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {(() => {
-                                                const idToGroup = new Map<number, ContactGroup>()
-                                                groups.forEach(g => idToGroup.set(g.id, g))
-                                                const toPath = (gid: number): string => {
-                                                    const segs: string[] = []
-                                                    let cur: ContactGroup | undefined = idToGroup.get(gid)
-                                                    const guard = new Set<number>()
-                                                    while (cur && !guard.has(cur.id)) {
-                                                        guard.add(cur.id)
-                                                        segs.unshift(cur.name)
-                                                        if (cur.parent_group && idToGroup.has(cur.parent_group)) {
-                                                            cur = idToGroup.get(cur.parent_group)
-                                                        } else {
-                                                            break
-                                                        }
-                                                    }
-                                                    return segs.join(' > ')
-                                                }
-                                                const ids = c.groups || []
-                                                if (!ids.length) return '—'
-                                                const paths = ids.map(toPath).filter(Boolean)
-                                                return paths.length ? paths.join(', ') : (ids.map(id => idToGroup.get(id)?.name || String(id)).join(', '))
-                                            })()}
-                                        </TableCell>
-                                        <TableCell className="text-right pr-3">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []); }}>Edit</Button>
-                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
+                    <div className="rounded-md border overflow-hidden">
+                        <Table>
+                            <TableHeader>
                                 <TableRow>
-                                    <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                                        No contacts found
+                                    <TableHead
+                                        className="cursor-pointer select-none"
+                                        onClick={() => setOrdering((prev) => prev === 'name' ? '-name' : 'name')}
+                                    >
+                                        <span className="inline-flex items-center gap-1">
+                                            Name {ordering.includes('name') && (ordering.startsWith('-') ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />)}
+                                        </span>
+                                    </TableHead>
+                                    <TableHead>Groups</TableHead>
+                                    <TableHead className="w-[1%] whitespace-nowrap text-right pr-3">Actions</TableHead>
+                                </TableRow>
+                                {/* Filters row */}
+                                <TableRow>
+                                    <TableCell>
+                                        <div className="relative">
+                                            <Input
+                                                value={query}
+                                                onChange={(e) => { setQuery(e.target.value) }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault()
+                                                        setFilters({ name: query.trim().toLowerCase() })
+                                                        setPage(1)
+                                                    }
+                                                }}
+                                                placeholder="Filter name…"
+                                                className="pl-8 h-8"
+                                            />
+                                            <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell />
+                                    <TableCell className="text-right pr-3">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2"
+                                            disabled={fetchingContacts}
+                                            onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}
+                                        >
+                                            Apply
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-                ) : (
-                <div className="rounded-md border divide-y">
-                    {/* Filters row for Tree view */}
-                    <div className="flex items-center justify-between p-2">
-                        <div className="relative">
-                            <Input
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ name: query.trim().toLowerCase() }); setPage(1) } }}
-                                placeholder="Filter name…"
-                                className="pl-8 h-8 w-64"
-                            />
-                            <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
-                        </div>
-                        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={fetchingContacts} onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}>Apply</Button>
+                            </TableHeader>
+                            <TableBody>
+                                {loadingContacts ? (
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                            <TableCell className="text-right pr-3">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Skeleton className="h-8 w-16" />
+                                                    <Skeleton className="h-8 w-16" />
+                                                    <Skeleton className="h-8 w-16" />
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : contacts.length ? (
+                                    contacts.map((c) => (
+                                        <TableRow key={c.id}>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    {(() => {
+                                                        const pic = getContactPicture(c)
+                                                        return pic ? (
+                                                            <img
+                                                                src={pic}
+                                                                alt={c.name}
+                                                                className="h-8 w-8 rounded-full object-cover border"
+                                                                loading="lazy"
+                                                            />
+                                                        ) : (
+                                                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium border">
+                                                                {c.name?.charAt(0)?.toUpperCase() || '?'}
+                                                            </div>
+                                                        )
+                                                    })()}
+                                                    <div className="font-medium">{c.name}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">
+                                                {(() => {
+                                                    const idToGroup = new Map<number, ContactGroup>()
+                                                    groups.forEach(g => idToGroup.set(g.id, g))
+                                                    const toPath = (gid: number): string => {
+                                                        const segs: string[] = []
+                                                        let cur: ContactGroup | undefined = idToGroup.get(gid)
+                                                        const guard = new Set<number>()
+                                                        while (cur && !guard.has(cur.id)) {
+                                                            guard.add(cur.id)
+                                                            segs.unshift(cur.name)
+                                                            if (cur.parent_group && idToGroup.has(cur.parent_group)) {
+                                                                cur = idToGroup.get(cur.parent_group)
+                                                            } else {
+                                                                break
+                                                            }
+                                                        }
+                                                        return segs.join(' > ')
+                                                    }
+                                                    const ids = c.groups || []
+                                                    if (!ids.length) return '—'
+                                                    const paths = ids.map(toPath).filter(Boolean)
+                                                    return paths.length ? paths.join(', ') : (ids.map(id => idToGroup.get(id)?.name || String(id)).join(', '))
+                                                })()}
+                                            </TableCell>
+                                            <TableCell className="text-right pr-3">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
+                                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []); }}>Edit</Button>
+                                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                                            No contacts found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
-                    <ul className="p-2">
-                        {groupTree.map((node) => (
-                            <TreeGroupNode
-                                key={node.id}
-                                node={node}
-                                depth={0}
-                                contactsByGroup={contactsByGroup}
-                                onView={(id) => setViewingId(id)}
-                                onEdit={(c) => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}
-                                onDelete={(id) => setConfirmDeleteId(id)}
-                            />
-                        ))}
-                        {/* Ungrouped contacts */}
-                        {ungroupedContacts.length > 0 && (
-                            <li className="pt-2">
-                                <div className="font-medium text-sm mb-1">Ungrouped</div>
-                                <ul className="ml-3 space-y-1">
-                                    {ungroupedContacts.map((c) => (
-                                        <li key={c.id} className="flex items-center justify-between text-sm">
-                                            <span>{c.name}</span>
-                                            <div className="flex items-center gap-2">
-                                                <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}>Edit</Button>
-                                                <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </li>
-                        )}
-                        {groupTree.length === 0 && ungroupedContacts.length === 0 && (
-                            <li className="text-sm text-muted-foreground">No contacts found</li>
-                        )}
-                    </ul>
-                </div>
+                ) : (
+                    <div className="rounded-md border divide-y">
+                        {/* Filters row for Tree view */}
+                        <div className="flex items-center justify-between p-2">
+                            <div className="relative">
+                                <Input
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setFilters({ name: query.trim().toLowerCase() }); setPage(1) } }}
+                                    placeholder="Filter name…"
+                                    className="pl-8 h-8 w-64"
+                                />
+                                <Search className="absolute left-2 top-2 size-4 text-muted-foreground" />
+                            </div>
+                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={fetchingContacts} onClick={() => { setFilters({ name: query.trim().toLowerCase() }); setPage(1) }}>Apply</Button>
+                        </div>
+                        <ul className="p-2">
+                            {groupTree.map((node) => (
+                                <TreeGroupNode
+                                    key={node.id}
+                                    node={node}
+                                    depth={0}
+                                    contactsByGroup={contactsByGroup}
+                                    onView={(id) => setViewingId(id)}
+                                    onEdit={(c) => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}
+                                    onDelete={(id) => setConfirmDeleteId(id)}
+                                />
+                            ))}
+                            {/* Ungrouped contacts */}
+                            {ungroupedContacts.length > 0 && (
+                                <li className="pt-2">
+                                    <div className="font-medium text-sm mb-1">Ungrouped</div>
+                                    <ul className="ml-3 space-y-1">
+                                        {ungroupedContacts.map((c) => (
+                                            <li key={c.id} className="flex items-center justify-between text-sm">
+                                                <span>{c.name}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => setViewingId(c.id)}>View</Button>
+                                                    <Button size="sm" variant="outline" onClick={() => { setEditingId(c.id); setEditName(c.name); setEditGroups(c.groups || []) }}>Edit</Button>
+                                                    <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(c.id)} disabled={deleting}>Delete</Button>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </li>
+                            )}
+                            {groupTree.length === 0 && ungroupedContacts.length === 0 && (
+                                <li className="text-sm text-muted-foreground">No contacts found</li>
+                            )}
+                        </ul>
+                    </div>
                 )}
                 {(() => {
                     const totalPages = Math.max(1, Math.ceil(totalContacts / pageSize))
@@ -480,7 +517,7 @@ const ContactPage = () => {
                                 <input id="picture" type="file" accept="image/*" onChange={(e) => setPicture(e.target.files?.[0] || null)} className="h-9 rounded-md border bg-background px-2 text-sm" />
                                 <span className="text-xs text-muted-foreground">Optional. JPG/PNG recommended.</span>
                             </div>
-                            
+
                             <div className="grid gap-2">
                                 <Label>Groups</Label>
                                 <div className="flex flex-wrap gap-3">
@@ -568,6 +605,15 @@ const ContactPage = () => {
                                     setEditPicture(f)
                                 }} className="h-9 rounded-md border bg-background px-2 text-sm" />
                                 <span className="text-xs text-muted-foreground">Optional. Upload to replace existing picture.</span>
+                                {editPreviewUrl && (
+                                    <div className="pt-2">
+                                        <img
+                                            src={editPreviewUrl}
+                                            alt={editName || 'Contact picture'}
+                                            className="h-20 w-20 rounded-md object-cover border"
+                                        />
+                                    </div>
+                                )}
                             </div>
                             <div className="grid gap-2">
                                 <Label>Groups</Label>
@@ -580,7 +626,7 @@ const ContactPage = () => {
                                     ))}
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-2 justify-end">
                                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
                                 <Button type="submit" disabled={updating}>Save</Button>
