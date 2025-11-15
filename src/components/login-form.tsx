@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import type { ApiSuccess, AuthToken } from '@/store/api/payFirstApi'
 import { useApiLoginMutation, useResendEmailMutation } from '@/store/api/payFirstApi'
 import { toast } from 'react-toastify'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export function LoginForm({
   className,
@@ -21,8 +21,6 @@ export function LoginForm({
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
   const [loginError, setLoginError] = useState<{ code?: string; message?: string } | null>(null)
   const navigate = useNavigate()
-  const location = useLocation()
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/'
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -51,7 +49,17 @@ export function LoginForm({
           const ok = (res as ApiSuccess<AuthToken>)?.status === true
           const token = ok ? (res as ApiSuccess<AuthToken>).data?.token : undefined
           if (ok && token) {
-            navigate(from, { replace: true })
+            // Force a full page refresh to the app root so Gate renders the dashboard.
+            // Respect Vite BASE_URL (e.g., "/PayFirst/") and trim trailing slash for path assembly.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const base: string = (() => { try { return ((import.meta as any)?.env?.BASE_URL) || '/' } catch { return '/' } })()
+            const prefix = base.replace(/\/$/, '')
+            const target = `${prefix}/`
+            if (typeof window !== 'undefined') {
+              window.location.replace(target)
+            } else {
+              navigate('/', { replace: true })
+            }
           }
         })
         .catch((err) => {
