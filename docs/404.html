@@ -8,8 +8,9 @@
       (function() {
         // GitHub Pages SPA fallback: redirect unknown routes to index with encoded path
         var l = window.location;
-        // Project base path (repo name). Update if repo name changes.
-        var base = '/PayFirst/';
+        // Base path for the site. For custom domain at root, use '/'.
+        // If hosting under a subpath (e.g., project pages), set base accordingly.
+        var base = '/';
         // Ensure base ends with a single slash
         base = base.replace(/\/?$/, '/');
         // Compute path relative to base, ensuring a leading slash
