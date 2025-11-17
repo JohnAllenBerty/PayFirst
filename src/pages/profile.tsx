@@ -1,4 +1,5 @@
 import { useProfileQuery, useUpdateProfileMutation, type ApiFail, type ApiSuccess, type Profile } from '@/store/api/payFirstApi'
+import { useAuthToken } from '@/hooks/useAuthToken'
 import { useMemo, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,8 @@ import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
 import { useMetaPageTitle } from '@/hooks/useMeta'
 
 const ProfilePage = () => {
-    const { data, isLoading, refetch } = useProfileQuery()
+    const { hasToken } = useAuthToken()
+    const { data, isLoading, refetch } = useProfileQuery(undefined, { skip: !hasToken })
     const { title } = useMetaPageTitle('/profile', 'Profile • PayFirst')
     const [updateProfile, { isLoading: saving }] = useUpdateProfileMutation()
     const failMessage = useMemo(() => {

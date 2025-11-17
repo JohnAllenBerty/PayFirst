@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useMetaQuery, type ApiFail, type ApiSuccess, type ModuleInfo } from '@/store/api/payFirstApi'
+import { useAuthToken } from '@/hooks/useAuthToken'
 
 export type MetaModule = {
     key: string
@@ -62,7 +63,8 @@ function extractModule(raw: Record<string, unknown>): MetaModule | undefined {
 }
 
 export const MetaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { data: metaRes, isLoading } = useMetaQuery()
+    const { hasToken } = useAuthToken()
+    const { data: metaRes, isLoading } = useMetaQuery(undefined, { skip: !hasToken })
 
     const modules = useMemo(() => {
         const res = metaRes as ApiFail | ApiSuccess<ModuleInfo[]> | ModuleInfo[] | undefined

@@ -15,6 +15,14 @@ export const store = configureStore({
         getDefaultMiddleware().concat(payFirstApi.middleware),
 })
 
+// Expose store globally for non-module contexts / late access (e.g., API layer 401 handler without circular import)
+try {
+    if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).__PAYFIRST_STORE = store
+    }
+} catch { /* noop */ }
+
 // types for use throughout the app
 export type AppDispatch = typeof store.dispatch
 export type RootState = ReturnType<typeof store.getState>

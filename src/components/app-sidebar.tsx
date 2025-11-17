@@ -17,6 +17,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useProfileQuery, type ApiSuccess, type ApiFail, type Profile } from "@/store/api/payFirstApi"
+import { useAuthToken } from '@/hooks/useAuthToken'
 import { useMeta } from "@/context/MetaContext"
 
 // Static shells; labels will be overridden by Meta when present
@@ -54,7 +55,8 @@ const sections = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { getLabel, isActive } = useMeta()
-  const { data: profileRes } = useProfileQuery()
+  const { hasToken } = useAuthToken()
+  const { data: profileRes } = useProfileQuery(undefined, { skip: !hasToken })
   const userFromProfile = React.useMemo(() => {
     const fallback = { name: "User", email: "", avatar: "" }
     if (profileRes && typeof profileRes !== 'string') {

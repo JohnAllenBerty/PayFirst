@@ -2,12 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSummaryQuery, useMetaQuery, type ApiFail, type ApiSuccess, type SummaryItem, type ModuleInfo } from "@/store/api/payFirstApi";
+import { useAuthToken } from '@/hooks/useAuthToken'
 import { useMetaPageTitle } from '@/hooks/useMeta'
 import { useMemo } from "react";
 
 const Dashboard = () => {
-    const { data: summaryRes, isLoading: loadingSummary } = useSummaryQuery();
-    const { data: metaRes, isLoading: loadingMeta } = useMetaQuery();
+    const { hasToken } = useAuthToken()
+    const { data: summaryRes, isLoading: loadingSummary } = useSummaryQuery(undefined, { skip: !hasToken });
+    const { data: metaRes, isLoading: loadingMeta } = useMetaQuery(undefined, { skip: !hasToken });
     const { title } = useMetaPageTitle('/', 'Dashboard • PayFirst')
 
     const summary = useMemo(() => {

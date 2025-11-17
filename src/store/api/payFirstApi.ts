@@ -1,6 +1,8 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryApi, FetchArgs } from "@reduxjs/toolkit/query";
 import { toast } from "react-toastify";
+import { openAuthModal } from '../slices/authModalSlice';
+import { setError } from '../slices/errorSlice';
 
 // Types
 export type ApiSuccess<T> = { status: true; message: string; data: T };
@@ -85,20 +87,23 @@ async function handle401Response() {
         } catch { /* ignore */ }
     }
     try {
-        const { store } = await import('../store')
-        const { openAuthModal } = await import('../slices/authModalSlice')
-        store.dispatch(openAuthModal('401'))
-        try { sessionStorage.setItem('auth_modal_open', '1') } catch { /* ignore */ }
+        const globalStore = (typeof window !== 'undefined') ? (window as unknown as { __PAYFIRST_STORE?: { dispatch: (a: unknown) => void } }).__PAYFIRST_STORE : undefined
+        if (globalStore) {
+            globalStore.dispatch(openAuthModal('401'))
+            try { sessionStorage.setItem('auth_modal_open', '1') } catch { /* ignore */ }
+        }
     } catch (e) {
-        // Fallback: console log if dynamic import fails
         try { console.warn('Failed to dispatch openAuthModal', e) } catch { /* noop */ }
     }
 }
 
 async function handle500Response() {
-    const { store } = await import('../store');
-    const { setError } = await import('../slices/errorSlice'); // Assuming openLoginModal is also dynamically imported if needed
-    store.dispatch(setError('500'));
+    try {
+        const globalStore = (typeof window !== 'undefined') ? (window as unknown as { __PAYFIRST_STORE?: { dispatch: (a: unknown) => void } }).__PAYFIRST_STORE : undefined
+        if (globalStore) {
+            globalStore.dispatch(setError('500'))
+        }
+    } catch { /* noop */ }
     toast.error('Internal Server Error');
 }
 
@@ -147,6 +152,24 @@ const API_BASE = (() => {
     return resolved || '/api'
 })();
 
+// Determine if a request path is protected (requires valid auth token)
+function isProtectedPath(path: string): boolean {
+    if (!path) return false
+    // Normalize to start with '/'
+    if (!path.startsWith('/')) path = '/' + path
+    return (
+        path === '/profile' ||
+        path === '/meta' ||
+        path === '/login' ? false : // public
+        path.startsWith('/user/') ||
+        path.startsWith('/verify-email') ||
+        path.startsWith('/resend_email') ||
+        path.startsWith('/change_password') ||
+        path.startsWith('/forgot_password') ||
+        path.startsWith('/reset_password')
+    );
+}
+
 const baseQuery = fetchBaseQuery({
     baseUrl: API_BASE, // Dev: "/api" (proxied). Prod: absolute origin (e.g., https://api.example.com)
     prepareHeaders: (headers, api) => {
@@ -163,36 +186,6 @@ const baseQuery = fetchBaseQuery({
         }
         return headers;
     },
-    responseHandler: async (response) => {
-        if (response.status === 401) {
-            handle401Response();
-        }
-        if (response.status === 500) {
-            handle500Response();
-        }
-        const ct = response.headers.get('Content-Type') || '';
-        try {
-            if (ct.includes('application/pdf')) {
-                const contentDisposition = response.headers.get('Content-Disposition');
-                const filename = contentDisposition?.split('filename=')[1]?.split(';')[0]?.replace(/"/g, '');
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                return { url: blobUrl, filename: filename };
-            }
-            if (ct.includes('application/json')) {
-                return await response.json();
-            }
-            if (ct.startsWith('text/')) {
-                return await response.text();
-            }
-            // Fallback: try text, then provide minimal info; never return the raw Response
-            try { return await response.text(); } catch { /* noop */ }
-            return { status: response.status, statusText: response.statusText, url: response.url };
-        } catch {
-            // If parsing fails, still return minimal serializable info
-            return { status: response.status, statusText: response.statusText, url: response.url };
-        }
-    },
 });
 
 const customBaseQuery = async (
@@ -200,7 +193,33 @@ const customBaseQuery = async (
     api: BaseQueryApi,
     extraOptions: unknown,
 ) => {
+    // Early guard: if modal already open (sentinel set) and no token, suppress network calls
+    try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token')
+        const sentinel = sessionStorage.getItem('auth_modal_open') === '1'
+        if (!token && sentinel) {
+            let url: string | undefined
+            if (typeof args === 'string') url = args
+            else if (args && typeof args === 'object') url = (args as FetchArgs).url
+            if (url && isProtectedPath(url)) {
+                return { error: { status: 401, data: { message: 'auth modal open; suppressed request', url } } }
+            }
+        }
+    } catch { /* ignore */ }
+
     const result = await baseQuery(args, api, extraOptions as Record<string, unknown>);
+
+    // Detect HTTP status for error & dispatch auth / server handlers
+    const status: number | undefined = (result.error && typeof result.error === 'object')
+        ? (result.error as { status?: number }).status
+        : undefined;
+
+    if (status === 401) {
+        // Prevent spamming: only fire if modal not already open
+        try { if (!sessionStorage.getItem('auth_modal_open')) await handle401Response(); } catch { await handle401Response(); }
+    } else if (status === 500) {
+        await handle500Response();
+    }
 
     // Ensure both data and error are serializable
     if (result.data !== undefined) {

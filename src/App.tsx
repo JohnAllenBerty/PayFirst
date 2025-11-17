@@ -6,7 +6,7 @@ import { childrenRoutes } from '@/routes/routes';
 // PrivateRoute no longer wraps the root; we inline a Gate component instead.
 import { Suspense } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import type { RootState } from './store/store';
+import type { RootState, AppDispatch } from './store/store';
 import { closeAuthModal } from './store/slices/authModalSlice';
 import { LoginForm } from '@/components/login-form';
 import { Provider } from 'react-redux';
@@ -71,7 +71,7 @@ export default function App() {
 }
 
 function InnerApp() {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const authOpen = useSelector((s: RootState) => s.authModal.open);
   const reason = useSelector((s: RootState) => s.authModal.reason);
   return (
@@ -99,8 +99,6 @@ function InnerApp() {
               onSuccess={() => {
                 dispatch(closeAuthModal())
                 try { sessionStorage.removeItem('auth_modal_open') } catch { /* ignore */ }
-                // Soft reload to refresh queries / state
-                try { window.location.reload() } catch { /* ignore */ }
               }}
               className="mt-2"
             />
