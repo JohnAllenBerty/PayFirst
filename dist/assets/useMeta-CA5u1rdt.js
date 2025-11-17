@@ -1,1 +1,0 @@
-import{a4 as c,r as n}from"./index-BORtUZfV.js";function a(e,r){const{getTitle:o,ready:s}=c(),t=n.useMemo(()=>o(e,r),[o,e,r]);return n.useEffect(()=>{if(!t)return;const u=document.title;return document.title=t,()=>{document.title=u}},[t]),{title:t,ready:s}}export{a as u};
