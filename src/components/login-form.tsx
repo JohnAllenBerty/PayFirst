@@ -10,8 +10,9 @@ import { Link, useNavigate } from 'react-router-dom'
 
 export function LoginForm({
   className,
+  onSuccess,
   ...props
-}: React.ComponentProps<'form'>) {
+}: React.ComponentProps<'form'> & { onSuccess?: () => void }) {
   const [login, { isLoading, isError }] = useApiLoginMutation()
   const [resendEmail, { isLoading: resending }] = useResendEmailMutation()
   const [email, setEmail] = useState('')
@@ -49,8 +50,12 @@ export function LoginForm({
           const ok = (res as ApiSuccess<AuthToken>)?.status === true
           const token = ok ? (res as ApiSuccess<AuthToken>).data?.token : undefined
           if (ok && token) {
-            // Force a full page refresh to the app root so Gate renders the dashboard.
-            // Respect Vite BASE_URL (e.g., "/PayFirst/") and trim trailing slash for path assembly.
+            if (onSuccess) {
+              // Allow caller to handle post-login (e.g., close modal, refetch data) without full reload.
+              onSuccess()
+              return
+            }
+            // Default behavior: full page refresh to root so Gate renders dashboard.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const base: string = (() => { try { return ((import.meta as any)?.env?.BASE_URL) || '/' } catch { return '/' } })()
             const prefix = base.replace(/\/$/, '')

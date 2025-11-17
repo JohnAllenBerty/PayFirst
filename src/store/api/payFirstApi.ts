@@ -71,23 +71,26 @@ export type ListParams = {
 } & Record<string, string | number | boolean | undefined>;
 
 async function handle401Response() {
-    // Redirect to login on unauthorized, but avoid bouncing when already on login/sign-up routes
+    // Open a re-login modal instead of hard redirect, unless already on public auth page.
     if (typeof window !== 'undefined') {
-        // Respect app basename (e.g., "/PayFirst") for GitHub Pages
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const base: string = (() => { try { return ((import.meta as any)?.env?.BASE_URL) || '/' } catch { return '/' } })()
-        const prefix = base.replace(/\/$/, '') // "/PayFirst"
-        const path = window.location.pathname || ''
-        // Strip basename for route checks
-        const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
-        const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
-        // Prefer sending users to app root; Gate will render LoginPage if unauthenticated.
-        if (!onAuthRoute) {
-            const target = `${prefix}/`
-            if (window.location.pathname !== target) {
-                window.location.href = target
-            }
-        }
+        // Determine if we are on an auth route to avoid redundant modal.
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const base: string = ((import.meta as any)?.env?.BASE_URL) || '/'
+            const prefix = base.replace(/\/$/, '')
+            const path = window.location.pathname || ''
+            const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
+            const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
+            if (onAuthRoute) return
+        } catch { /* ignore */ }
+    }
+    try {
+        const { store } = await import('../store')
+        const { openAuthModal } = await import('../slices/authModalSlice')
+        store.dispatch(openAuthModal('401'))
+    } catch (e) {
+        // Fallback: console log if dynamic import fails
+        try { console.warn('Failed to dispatch openAuthModal', e) } catch { /* noop */ }
     }
 }
 
