@@ -1,7 +1,7 @@
 import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig, loadEnv } from "vite"
+import { defineConfig, loadEnv, type Rollup } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -33,6 +33,28 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
+      },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vendor-react": ["react", "react-dom"],
+            "vendor-redux": ["@reduxjs/toolkit", "react-redux"],
+            "vendor-router": ["react-router-dom"],
+            "vendor-radix": [
+              "@radix-ui/react-avatar",
+              "@radix-ui/react-checkbox",
+              "@radix-ui/react-collapsible",
+              "@radix-ui/react-dialog",
+              "@radix-ui/react-dropdown-menu",
+              "@radix-ui/react-label",
+              "@radix-ui/react-separator",
+              "@radix-ui/react-slot",
+              "@radix-ui/react-tooltip",
+            ],
+          } satisfies Rollup.OutputOptions["manualChunks"],
+        },
       },
     },
     server: {
