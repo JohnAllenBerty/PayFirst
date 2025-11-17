@@ -3,6 +3,7 @@ import type { BaseQueryApi, FetchArgs } from "@reduxjs/toolkit/query";
 import { toast } from "react-toastify";
 import { openAuthModal } from '../slices/authModalSlice';
 import { setError } from '../slices/errorSlice';
+import { isProtectedPath } from './protectedPaths';
 
 // Types
 export type ApiSuccess<T> = { status: true; message: string; data: T };
@@ -152,23 +153,7 @@ const API_BASE = (() => {
     return resolved || '/api'
 })();
 
-// Determine if a request path is protected (requires valid auth token)
-function isProtectedPath(path: string): boolean {
-    if (!path) return false
-    // Normalize to start with '/'
-    if (!path.startsWith('/')) path = '/' + path
-    return (
-        path === '/profile' ||
-        path === '/meta' ||
-        path === '/login' ? false : // public
-        path.startsWith('/user/') ||
-        path.startsWith('/verify-email') ||
-        path.startsWith('/resend_email') ||
-        path.startsWith('/change_password') ||
-        path.startsWith('/forgot_password') ||
-        path.startsWith('/reset_password')
-    );
-}
+// (moved) isProtectedPath now centralized in protectedPaths.ts
 
 const baseQuery = fetchBaseQuery({
     baseUrl: API_BASE, // Dev: "/api" (proxied). Prod: absolute origin (e.g., https://api.example.com)
