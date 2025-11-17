@@ -88,6 +88,7 @@ async function handle401Response() {
         const { store } = await import('../store')
         const { openAuthModal } = await import('../slices/authModalSlice')
         store.dispatch(openAuthModal('401'))
+        try { sessionStorage.setItem('auth_modal_open', '1') } catch { /* ignore */ }
     } catch (e) {
         // Fallback: console log if dynamic import fails
         try { console.warn('Failed to dispatch openAuthModal', e) } catch { /* noop */ }

@@ -61,6 +61,7 @@ export function LoginForm({
             const prefix = base.replace(/\/$/, '')
             const target = `${prefix}/`
             if (typeof window !== 'undefined') {
+              try { sessionStorage.removeItem('auth_modal_open') } catch { /* ignore */ }
               window.location.replace(target)
             } else {
               navigate('/', { replace: true })

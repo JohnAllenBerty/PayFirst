@@ -31,6 +31,12 @@ const BASENAME = (() => {
 
 function hasToken(): boolean {
   if (typeof window === 'undefined') return false
+  // If a 401 occurred and we opened the auth modal, keep RootLayout mounted
+  // so the user stays on their current route.
+  try {
+    const sentinel = sessionStorage.getItem('auth_modal_open')
+    if (sentinel === '1') return true
+  } catch { /* ignore */ }
   const t = localStorage.getItem('token') || sessionStorage.getItem('token')
   return !!t && t !== 'undefined' && t !== 'null' && t.trim() !== ''
 }
@@ -92,7 +98,8 @@ function InnerApp() {
             <LoginForm
               onSuccess={() => {
                 dispatch(closeAuthModal())
-                // After successful modal login we can optionally refetch critical queries; simplest is a soft reload.
+                try { sessionStorage.removeItem('auth_modal_open') } catch { /* ignore */ }
+                // Soft reload to refresh queries / state
                 try { window.location.reload() } catch { /* ignore */ }
               }}
               className="mt-2"
