@@ -43,6 +43,7 @@ function hasToken(): boolean {
 
 // Gate decides what to render at root: Dashboard (RootLayout) if token, else LoginPage.
 function Gate() {
+  console.log('Gate checking authentication status...', { hasToken: hasToken() })
   return hasToken() ? <RootLayout /> : <LoginPage />
 }
 
