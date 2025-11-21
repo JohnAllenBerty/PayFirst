@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting…</title>
+    <script>
+      (function() {
+        // GitHub Pages SPA fallback: redirect unknown routes to index with encoded path
+        var l = window.location;
+        // Base path for the site. For custom domain at root, use '/'.
+        // If hosting under a subpath (e.g., project pages), set base accordingly.
+        var base = '/';
+        // Ensure base ends with a single slash
+        base = base.replace(/\/?$/, '/');
+        // Compute path relative to base, ensuring a leading slash
+        var path = l.pathname;
+        try {
+          // Normalize to always keep a leading slash for the app route
+          if (path.toLowerCase().startsWith(base.toLowerCase())) {
+            path = path.slice(base.length - 1);
+          }
+        } catch (_) {}
+        var encoded = encodeURIComponent(path + l.search + l.hash);
+        // Redirect to the root with ?p= so index.html can rewrite the URL
+        l.replace(base + '?p=' + encoded);
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecting…
+  </body>
+  </html>
