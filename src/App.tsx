@@ -73,9 +73,10 @@ export default function App() {
 
 function InnerApp() {
   const dispatch = useDispatch<AppDispatch>();
-  const authOpen = useSelector((s: RootState) => s.authModal.open);
+  const authOpen = useSelector((s: RootState) => {
+    return s.authModal.open;
+  });
   const reason = useSelector((s: RootState) => s.authModal.reason);
-  console.log('[InnerApp] Auth modal state:', { open: authOpen, reason });
 
   // Listen for custom 401 events as fallback
   useEffect(() => {

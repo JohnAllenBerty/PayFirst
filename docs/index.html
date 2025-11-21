@@ -5,7 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PayFirst</title>
-    <script type="module" crossorigin src="/assets/index-5kFlk6Lp.js"></script>
+    <script type="module" crossorigin src="/assets/index-DYoDE4_0.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-gH-7aFTg.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-redux-Waidrk23.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-router-Du5tOU4S.js">
@@ -22,11 +22,18 @@
           var p = params.get('p');
           if (p) {
             var decoded = decodeURIComponent(p);
-            // Compute the base from current path (e.g., /PayFirst/)
+            // For custom domain at root (/), use the decoded path directly
+            // For subpath hosting (e.g., /PayFirst/), compute base and join properly
             var path = window.location.pathname;
-            var base = path.substring(0, path.lastIndexOf('/') + 1);
-            // Join base and decoded route, avoiding duplicate slashes
-            var newUrl = base.replace(/\/$/, '/') + decoded.replace(/^\//, '');
+            var base = path === '/' ? '/' : path.substring(0, path.lastIndexOf('/') + 1);
+            var newUrl;
+            if (base === '/') {
+              // Custom domain at root: use decoded path directly
+              newUrl = decoded;
+            } else {
+              // Subpath hosting: join base and decoded route
+              newUrl = base.replace(/\/$/, '/') + decoded.replace(/^\//, '');
+            }
             window.history.replaceState(null, '', newUrl);
           }
         } catch (_) { /* no-op */ }
