@@ -76,6 +76,16 @@ export type ListParams = {
 async function handle401Response() {
     // Open a re-login modal instead of hard redirect, unless already on public auth page.
     console.log('[401 Handler] Starting 401 response handling');
+
+    // Clear invalid tokens from storage
+    try {
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
+        console.log('[401 Handler] Cleared invalid tokens from storage');
+    } catch (e) {
+        console.warn('[401 Handler] Failed to clear tokens:', e);
+    }
+
     if (typeof window !== 'undefined') {
         // Determine if we are on an auth route to avoid redundant modal.
         try {
