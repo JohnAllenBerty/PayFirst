@@ -210,8 +210,7 @@ const customBaseQuery = async (
     // Early guard: if modal already open (sentinel set) and no token, suppress network calls
     try {
         const token = localStorage.getItem('token') || sessionStorage.getItem('token')
-        const sentinel = sessionStorage.getItem('auth_modal_open') === '1'
-        if (!token && sentinel) {
+        if (!token) {
             let url: string | undefined
             if (typeof args === 'string') url = args
             else if (args && typeof args === 'object') url = (args as FetchArgs).url
