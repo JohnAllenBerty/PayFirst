@@ -60,14 +60,12 @@ const PaymentMethodsPage = () => {
   const [createOpen, setCreateOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [isDefault, setIsDefault] = useState(false)
-  const [isCommon, setIsCommon] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   // Edit modal state
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [editDefault, setEditDefault] = useState(false)
-  const [editCommon, setEditCommon] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -150,7 +148,7 @@ const PaymentMethodsPage = () => {
                     <TableCell>{m.is_common ? 'Yes' : 'No'}</TableCell>
                     <TableCell className="text-right pr-3">
                       <div className="flex items-center justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setEditingId(m.id); setEditLabel(m.label); setEditDefault(!!m.is_default); setEditCommon(!!m.is_common) }}>Edit</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingId(m.id); setEditLabel(m.label); setEditDefault(!!m.is_default) }}>Edit</Button>
                         <Button size="sm" variant="destructive" disabled={deleting} onClick={async () => {
                           try {
                             const res = await deletePM(m.id).unwrap()
@@ -201,9 +199,8 @@ const PaymentMethodsPage = () => {
                 return
               }
               try {
-                const res = await createPM({ label: label.trim(), is_default: isDefault, is_common: isCommon }).unwrap()
+                const res = await createPM({ label: label.trim(), is_default: isDefault }).unwrap()
                 toast.success(extractSuccessMessage(res, 'Payment method added'))
-                setLabel(''); setIsDefault(false); setIsCommon(false)
                 setCreateOpen(false)
                 setRefresh(c => c + 1)
               } catch (e) {
@@ -216,7 +213,6 @@ const PaymentMethodsPage = () => {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} /> Default</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={isCommon} onChange={(e) => setIsCommon(e.target.checked)} /> Common</label>
               </div>
               {formError && <div className="text-sm text-red-600">{formError}</div>}
               <div className="flex items-center gap-2 justify-end">
@@ -244,7 +240,7 @@ const PaymentMethodsPage = () => {
                   toast.error('Only one default method is allowed. Unset the other default first.')
                   return
                 }
-                const res = await updatePM({ id, changes: { label: editLabel.trim(), is_default: editDefault, is_common: editCommon } }).unwrap()
+                const res = await updatePM({ id, changes: { label: editLabel.trim(), is_default: editDefault } }).unwrap()
                 toast.success(extractSuccessMessage(res, 'Updated'))
                 setEditingId(null)
               } catch (e) {
@@ -257,7 +253,6 @@ const PaymentMethodsPage = () => {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={editDefault} onChange={(e) => setEditDefault(e.target.checked)} /> Default</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={editCommon} onChange={(e) => setEditCommon(e.target.checked)} /> Common</label>
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
