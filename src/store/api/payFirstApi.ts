@@ -110,12 +110,6 @@ async function handle401Response() {
         if (globalStore) {
             console.log('[401 Handler] Dispatching openAuthModal');
             globalStore.dispatch(openAuthModal('401'))
-            try {
-                sessionStorage.setItem('auth_modal_open', '1')
-                console.log('[401 Handler] Set sessionStorage sentinel');
-            } catch (e) {
-                console.warn('[401 Handler] Failed to set sessionStorage:', e);
-            }
             return
         } else {
             console.warn('[401 Handler] No global store available');
@@ -125,12 +119,6 @@ async function handle401Response() {
         try {
             console.log('[401 Handler] Dispatching custom event');
             window.dispatchEvent(new CustomEvent('payfirst-401', { detail: { reason: '401' } }));
-            try {
-                sessionStorage.setItem('auth_modal_open', '1')
-                console.log('[401 Handler] Set sessionStorage sentinel via event');
-            } catch (e) {
-                console.warn('[401 Handler] Failed to set sessionStorage via event:', e);
-            }
         } catch (e) {
             console.warn('[401 Handler] Failed to dispatch custom event:', e);
         }
@@ -315,7 +303,10 @@ export const payFirstApi = createApi({
         logout: builder.mutation<unknown, void>({
             query: () => ({ url: "/logout", method: "DELETE" }),
             async onQueryStarted(_, { queryFulfilled }) {
-                try { await queryFulfilled; } finally { localStorage.removeItem("token"); }
+                try { await queryFulfilled; } finally {
+                    localStorage.removeItem("token");
+                    sessionStorage.removeItem("token");
+                }
             },
             invalidatesTags: ["User"],
         }),

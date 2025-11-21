@@ -87,7 +87,12 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => {
               logout().then(() => {
-                navigate('/', { replace: true })
+                // Use window.location for more reliable navigation during logout
+                window.location.href = '/';
+              }).catch((error) => {
+                console.error('Logout failed:', error)
+                // Still navigate even if logout fails
+                window.location.href = '/';
               });
             }}>
               <LogOut />
