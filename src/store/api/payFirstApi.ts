@@ -75,6 +75,7 @@ export type ListParams = {
 
 async function handle401Response() {
     // Open a re-login modal instead of hard redirect, unless already on public auth page.
+    console.log('[401 Handler] Starting 401 response handling');
     if (typeof window !== 'undefined') {
         // Determine if we are on an auth route to avoid redundant modal.
         try {
@@ -84,17 +85,47 @@ async function handle401Response() {
             const path = window.location.pathname || ''
             const relative = path.startsWith(prefix) ? path.slice(prefix.length) || '/' : path
             const onAuthRoute = relative.startsWith('/login') || relative.startsWith('/sign-up')
-            if (onAuthRoute) return
-        } catch { /* ignore */ }
+            console.log('[401 Handler] Current path:', path, 'relative:', relative, 'onAuthRoute:', onAuthRoute);
+            if (onAuthRoute) {
+                console.log('[401 Handler] Skipping modal - on auth route');
+                return
+            }
+        } catch (e) {
+            console.warn('[401 Handler] Error checking auth route:', e);
+        }
     }
     try {
         const globalStore = (typeof window !== 'undefined') ? (window as unknown as { __PAYFIRST_STORE?: { dispatch: (a: unknown) => void } }).__PAYFIRST_STORE : undefined
+        console.log('[401 Handler] Global store available:', !!globalStore);
         if (globalStore) {
+            console.log('[401 Handler] Dispatching openAuthModal');
             globalStore.dispatch(openAuthModal('401'))
-            try { sessionStorage.setItem('auth_modal_open', '1') } catch { /* ignore */ }
+            try {
+                sessionStorage.setItem('auth_modal_open', '1')
+                console.log('[401 Handler] Set sessionStorage sentinel');
+            } catch (e) {
+                console.warn('[401 Handler] Failed to set sessionStorage:', e);
+            }
+            return
+        } else {
+            console.warn('[401 Handler] No global store available');
+        }
+
+        // Fallback: dispatch custom event that App.tsx can listen to
+        try {
+            console.log('[401 Handler] Dispatching custom event');
+            window.dispatchEvent(new CustomEvent('payfirst-401', { detail: { reason: '401' } }));
+            try {
+                sessionStorage.setItem('auth_modal_open', '1')
+                console.log('[401 Handler] Set sessionStorage sentinel via event');
+            } catch (e) {
+                console.warn('[401 Handler] Failed to set sessionStorage via event:', e);
+            }
+        } catch (e) {
+            console.warn('[401 Handler] Failed to dispatch custom event:', e);
         }
     } catch (e) {
-        try { console.warn('Failed to dispatch openAuthModal', e) } catch { /* noop */ }
+        console.warn('[401 Handler] Failed to handle 401:', e);
     }
 }
 
@@ -199,7 +230,15 @@ const customBaseQuery = async (
         ? (result.error as { status?: number }).status
         : undefined;
 
+    console.log('[customBaseQuery] Request result:', {
+        status,
+        hasError: !!result.error,
+        error: result.error,
+        url: typeof args === 'string' ? args : (args as FetchArgs)?.url
+    });
+
     if (status === 401) {
+        console.log('[customBaseQuery] 401 detected, calling handle401Response');
         // Prevent spamming: only fire if modal not already open
         try { if (!sessionStorage.getItem('auth_modal_open')) await handle401Response(); } catch { await handle401Response(); }
     } else if (status === 500) {

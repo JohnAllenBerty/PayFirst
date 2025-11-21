@@ -4,10 +4,10 @@ import RootLayout from '@/pages/root-layout';
 import SignUpPage from '@/pages/sign-up-page';
 import { childrenRoutes } from '@/routes/routes';
 // PrivateRoute no longer wraps the root; we inline a Gate component instead.
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from './store/store';
-import { closeAuthModal } from './store/slices/authModalSlice';
+import { closeAuthModal, openAuthModal } from './store/slices/authModalSlice';
 import { LoginForm } from '@/components/login-form';
 import { Provider } from 'react-redux';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
@@ -75,6 +75,19 @@ function InnerApp() {
   const dispatch = useDispatch<AppDispatch>();
   const authOpen = useSelector((s: RootState) => s.authModal.open);
   const reason = useSelector((s: RootState) => s.authModal.reason);
+  console.log('[InnerApp] Auth modal state:', { open: authOpen, reason });
+
+  // Listen for custom 401 events as fallback
+  useEffect(() => {
+    const handle401Event = (event: CustomEvent) => {
+      console.log('[InnerApp] Received 401 event:', event.detail);
+      dispatch(openAuthModal(event.detail?.reason || '401'));
+    };
+
+    window.addEventListener('payfirst-401', handle401Event as EventListener);
+    return () => window.removeEventListener('payfirst-401', handle401Event as EventListener);
+  }, [dispatch]);
+
   return (
     <>
       <ToastContainer theme='colored' />
