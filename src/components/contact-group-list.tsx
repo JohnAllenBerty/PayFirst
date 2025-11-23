@@ -102,10 +102,13 @@ const ContactGroupList = () => {
 
     const failMessage = groupsRes && !groupsRes.status ? String(groupsRes.error ?? 'Server error') : null
     const groups: ContactGroup[] = useMemo(() => {
-        if (groupsRes && typeof groupsRes !== 'string') {
-            const res = groupsRes as ApiSuccess<ContactGroup[]> | ApiFail
-            if (res.status) return res.data
-        }
+        // Normalize API response defensively: handle unexpected non-array data shapes
+        if (!groupsRes || typeof groupsRes === 'string') return []
+        const res = groupsRes as ApiSuccess<ContactGroup[] | { results?: ContactGroup[] }> | ApiFail
+        if (!res.status) return []
+        const data = (res as ApiSuccess<ContactGroup[] | { results?: ContactGroup[] }>).data
+        if (Array.isArray(data)) return data
+        if (data && Array.isArray((data as { results?: ContactGroup[] }).results)) return (data as { results?: ContactGroup[] }).results || []
         return []
     }, [groupsRes])
 
