@@ -95,3 +95,52 @@ export function extractSuccessMessage(data: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+export function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '—'
+
+  const pad = (n: number) => n.toString().padStart(2, '0')
+
+  const day = pad(d.getDate())
+  const month = pad(d.getMonth() + 1)
+  const year = d.getFullYear()
+  const hours = pad(d.getHours())
+  const minutes = pad(d.getMinutes())
+  const seconds = pad(d.getSeconds())
+
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`
+}
+
+export function parseDateTime(dateStr: string): string | null {
+  // Expected format: DD-MM-YYYY HH:MM:SS
+  const regex = /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/
+  const match = dateStr.match(regex)
+  if (!match) return null
+
+  const [, day, month, year, hours, minutes, seconds] = match
+  const d = new Date(
+    parseInt(year),
+    parseInt(month) - 1,
+    parseInt(day),
+    parseInt(hours),
+    parseInt(minutes),
+    parseInt(seconds)
+  )
+
+  if (isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
+export function toUTCISOString(date: Date): string {
+  return new Date(Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+    date.getMilliseconds()
+  )).toISOString()
+}

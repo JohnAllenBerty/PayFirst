@@ -7,8 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Search, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
-import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { extractErrorMessage, extractSuccessMessage, formatDateTime, toUTCISOString } from '@/lib/utils'
+
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 
 const TransactionsPage = () => {
     const { title } = useMetaPageTitle('/transactions', 'Transactions • PayFirst')
@@ -138,6 +141,7 @@ const TransactionsPage = () => {
     const [amount, setAmount] = useState('')
     const [description, setDescription] = useState('')
     const [returnDate, setReturnDate] = useState('')
+    const [date, setDate] = useState<Date | undefined>(new Date())
     const [formError, setFormError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
     const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
@@ -158,6 +162,7 @@ const TransactionsPage = () => {
     const [editAmount, setEditAmount] = useState('')
     const [editDescription, setEditDescription] = useState('')
     const [editReturnDate, setEditReturnDate] = useState('')
+    const [editDate, setEditDate] = useState<Date | undefined>(undefined)
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
     const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -175,12 +180,13 @@ const TransactionsPage = () => {
                 amount: amt,
                 description: description.trim(),
                 return_date: returnDate || null,
-                date: new Date().toISOString().slice(0, 10),
-                    payment_method: paymentMethod === '' ? null : Number(paymentMethod),
-                    payment_source: paymentSource === '' ? null : Number(paymentSource),
-                    transaction_reference: txRef.trim() || null,
+                date: toUTCISOString(date!),
+                payment_method: paymentMethod === '' ? null : Number(paymentMethod),
+                payment_source: paymentSource === '' ? null : Number(paymentSource),
+                transaction_reference: txRef.trim() || null,
             }).unwrap()
-                setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate(''); setPaymentMethod(''); setPaymentSource(''); setTxRef('')
+            setLabel(''); setContact(''); setType('credit'); setAmount(''); setDescription(''); setReturnDate(''); setPaymentMethod(''); setPaymentSource(''); setTxRef('');
+            setDate(new Date())
             toast.success(extractSuccessMessage(res, 'Transaction created'))
             setRefresh((c) => c + 1)
             return true
@@ -350,12 +356,12 @@ const TransactionsPage = () => {
                                         <TableCell>{t.amount}</TableCell>
                                         <TableCell className="text-muted-foreground">{t.pending_amount}</TableCell>
                                         <TableCell>{contacts.find(c => c.id === t.contact)?.name || t.contact}</TableCell>
-                                        <TableCell>{t.date}</TableCell>
+                                        <TableCell>{formatDateTime(t.date)}</TableCell>
                                         <TableCell>{t.return_date || '—'}</TableCell>
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(t.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); setEditPaymentMethod(typeof t.payment_method === 'number' ? t.payment_method : ''); setEditPaymentSource(typeof t.payment_source === 'number' ? t.payment_source : ''); setEditTxRef(t.transaction_reference || ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setEditType(t._type); setEditAmount(String(t.amount)); setEditDescription(t.description || ''); setEditReturnDate(t.return_date || ''); setEditDate(t.date ? new Date(t.date) : undefined); setEditPaymentMethod(typeof t.payment_method === 'number' ? t.payment_method : ''); setEditPaymentSource(typeof t.payment_source === 'number' ? t.payment_source : ''); setEditTxRef(t.transaction_reference || ''); }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(t.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -418,6 +424,10 @@ const TransactionsPage = () => {
                             <div className="grid gap-2">
                                 <Label htmlFor="returnDate">Return date (optional)</Label>
                                 <Input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="date">Date</Label>
+                                <DateTimePicker date={date} setDate={setDate} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="payment-method">Payment method (optional)</Label>
@@ -520,7 +530,7 @@ const TransactionsPage = () => {
                                     <div><span className="text-muted-foreground">Type:</span> {tx._type}</div>
                                     <div><span className="text-muted-foreground">Amount:</span> {tx.amount}</div>
                                     <div><span className="text-muted-foreground">Pending:</span> {tx.pending_amount}</div>
-                                    <div><span className="text-muted-foreground">Date:</span> {tx.date}</div>
+                                    <div><span className="text-muted-foreground">Date:</span> {formatDateTime(tx.date)}</div>
                                     <div><span className="text-muted-foreground">Return date:</span> {tx.return_date || '—'}</div>
                                     <div><span className="text-muted-foreground">Description:</span> {tx.description || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (tx.payment_method ?? -1))?.label || '—'}</div>
@@ -546,7 +556,7 @@ const TransactionsPage = () => {
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
+                                await updateTx({ id, changes: { label: editLabel.trim(), _type: editType, amount: amt, description: editDescription.trim(), return_date: editReturnDate || null, date: toUTCISOString(editDate!), payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
                                 toast.success('Transaction updated')
                                 setEditingId(null)
                             } catch (e) {
@@ -575,6 +585,10 @@ const TransactionsPage = () => {
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-return-date">Return date</Label>
                                 <Input id="edit-return-date" type="date" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-date">Date</Label>
+                                <DateTimePicker date={editDate} setDate={setEditDate} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-payment-method">Payment method (optional)</Label>
