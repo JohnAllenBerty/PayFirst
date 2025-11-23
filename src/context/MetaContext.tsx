@@ -69,16 +69,30 @@ export const MetaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const modules = useMemo(() => {
         const res = metaRes as ApiFail | ApiSuccess<ModuleInfo[]> | ModuleInfo[] | undefined
         const map: Record<string, MetaModule> = {}
-        let arr: ModuleInfo[] = []
+        let arr: unknown = []
         if (!res) return map
-        if (Array.isArray(res)) arr = res
-        else if (typeof res !== 'string' && (res as ApiSuccess<ModuleInfo[]>)?.status) arr = (res as ApiSuccess<ModuleInfo[]>)?.data ?? []
-        arr.forEach((item) => {
-            if (item && typeof item === 'object') {
-                const mod = extractModule(item as Record<string, unknown>)
-                if (mod?.key) map[mod.key] = mod
+        if (Array.isArray(res)) {
+            arr = res
+        } else if (typeof res !== 'string' && (res as ApiSuccess<ModuleInfo[]>)?.status) {
+            const data = (res as ApiSuccess<ModuleInfo[]>)?.data
+            arr = Array.isArray(data) ? data : []
+            if (!Array.isArray(data)) {
+                // Non-fatal diagnostic to help trace unexpected meta shapes that could trigger forEach errors
+                if (process.env.NODE_ENV !== 'production') {
+                    // eslint-disable-next-line no-console
+                    console.warn('[MetaContext] metaRes.status===true but data is not an array:', data)
+                }
             }
-        })
+        }
+        // Safely iterate only if we have an array
+        if (Array.isArray(arr)) {
+            arr.forEach((item) => {
+                if (item && typeof item === 'object') {
+                    const mod = extractModule(item as Record<string, unknown>)
+                    if (mod?.key) map[mod.key] = mod
+                }
+            })
+        }
         return map
     }, [metaRes])
 
