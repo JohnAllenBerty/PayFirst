@@ -58,4 +58,12 @@ cleanDocsExceptCname(docsDir);
 console.log('[sync-docs] Copying dist -> docs...');
 copyRecursive(distDir, docsDir);
 
+// Copy 404.html from root to docs if it exists
+const root404 = path.join(root, '404.html');
+const docs404 = path.join(docsDir, '404.html');
+if (fs.existsSync(root404)) {
+  console.log('[sync-docs] Copying 404.html -> docs...');
+  fs.copyFileSync(root404, docs404);
+}
+
 console.log('[sync-docs] Done.');

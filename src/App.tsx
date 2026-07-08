@@ -4,11 +4,11 @@ import RootLayout from '@/pages/root-layout';
 import SignUpPage from '@/pages/sign-up-page';
 import { childrenRoutes } from '@/routes/routes';
 // PrivateRoute no longer wraps the root; we inline a Gate component instead.
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState, AppDispatch } from './store/store';
-import { closeAuthModal } from './store/slices/authModalSlice';
-import { LoginForm } from '@/components/login-form';
+import { openAuthModal } from './store/slices/authModalSlice';
+import { AuthModal } from '@/components/auth-modal';
 import { Provider } from 'react-redux';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { ToastContainer } from "react-toastify";
@@ -73,8 +73,22 @@ export default function App() {
 
 function InnerApp() {
   const dispatch = useDispatch<AppDispatch>();
-  const authOpen = useSelector((s: RootState) => s.authModal.open);
+  const authOpen = useSelector((s: RootState) => {
+    return s.authModal.open;
+  });
   const reason = useSelector((s: RootState) => s.authModal.reason);
+
+  // Listen for custom 401 events as fallback
+  useEffect(() => {
+    const handle401Event = (event: CustomEvent) => {
+      console.log('[InnerApp] Received 401 event:', event.detail);
+      dispatch(openAuthModal(event.detail?.reason || '401'));
+    };
+
+    window.addEventListener('payfirst-401', handle401Event as EventListener);
+    return () => window.removeEventListener('payfirst-401', handle401Event as EventListener);
+  }, [dispatch]);
+
   return (
     <>
       <ToastContainer theme='colored' />
@@ -83,29 +97,10 @@ function InnerApp() {
           <RouterProvider router={router} />
         </Suspense>
       </MetaProvider>
-      {authOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="relogin-title">
-          <div className="bg-background w-full max-w-md rounded-md shadow-lg border p-6 relative">
-            <button
-              type="button"
-              onClick={() => dispatch(closeAuthModal())}
-              className="absolute top-2 right-2 text-sm text-muted-foreground hover:text-foreground"
-              aria-label="Close relogin dialog"
-            >✕</button>
-            <h2 id="relogin-title" className="text-lg font-semibold mb-2">Session expired</h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              {reason === '401' ? 'Your session is no longer valid (401). Please login again to continue.' : 'Please login again.'}
-            </p>
-            <LoginForm
-              onSuccess={() => {
-                dispatch(closeAuthModal())
-                try { sessionStorage.removeItem('auth_modal_open') } catch { /* ignore */ }
-              }}
-              className="mt-2"
-            />
-          </div>
-        </div>
-      )}
+      <AuthModal
+        isOpen={authOpen}
+        reason={reason}
+      />
     </>
   )
 }

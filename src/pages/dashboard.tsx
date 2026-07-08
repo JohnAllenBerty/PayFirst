@@ -5,12 +5,21 @@ import { useSummaryQuery, useMetaQuery, type ApiFail, type ApiSuccess, type Summ
 import { useAuthToken } from '@/hooks/useAuthToken'
 import { useMetaPageTitle } from '@/hooks/useMeta'
 import { useMemo } from "react";
+import { useDispatch } from 'react-redux';
+import { openAuthModal } from '@/store/slices/authModalSlice';
+import type { AppDispatch } from '@/store/store';
 
 const Dashboard = () => {
     const { hasToken } = useAuthToken()
     const { data: summaryRes, isLoading: loadingSummary } = useSummaryQuery(undefined, { skip: !hasToken });
     const { data: metaRes, isLoading: loadingMeta } = useMetaQuery(undefined, { skip: !hasToken });
     const { title } = useMetaPageTitle('/', 'Dashboard • PayFirst')
+    const dispatch = useDispatch<AppDispatch>();
+
+    const handleTestModal = () => {
+        console.log('[Dashboard] Testing auth modal');
+        dispatch(openAuthModal('test'));
+    };
 
     const summary = useMemo(() => {
         const res = summaryRes as ApiFail | ApiSuccess<SummaryItem[]> | SummaryItem[] | undefined;
@@ -201,10 +210,11 @@ const Dashboard = () => {
                     <CardHeader>
                         <CardTitle className="text-base">Quick actions</CardTitle>
                     </CardHeader>
-                    <CardContent className="flex gap-2">
+                    <CardContent className="flex gap-2 flex-wrap">
                         <Button asChild><a href="transactions">Transactions</a></Button>
                         <Button asChild variant="outline"><a href="repayments">Repayments</a></Button>
                         <Button asChild variant="outline"><a href="contact">Contacts</a></Button>
+                        <Button variant="destructive" onClick={handleTestModal}>Test Auth Modal</Button>
                     </CardContent>
                 </Card>
             </div>

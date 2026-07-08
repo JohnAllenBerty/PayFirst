@@ -8,8 +8,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'react-toastify'
 import { type ApiFail, type ApiSuccess, type Paginated, type Repayment, type Transaction, type PaymentMethod, type PaymentSource } from '@/store/api/payFirstApi'
 import { useListRepaymentsQuery, useCreateRepaymentMutation, useListTransactionsQuery, useUpdateRepaymentMutation, useDeleteRepaymentMutation, useListPaymentMethodsQuery, useCreatePaymentMethodMutation, useListPaymentSourcesQuery, useCreatePaymentSourceMutation } from '@/store/api/payFirstApi'
-import { extractErrorMessage, extractSuccessMessage } from '@/lib/utils'
+import { extractErrorMessage, extractSuccessMessage, formatDateTime, toUTCISOString } from '@/lib/utils'
+
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 
 const RepaymentsPage = () => {
     const { title } = useMetaPageTitle('/repayments', 'Repayments • PayFirst')
@@ -127,7 +130,7 @@ const RepaymentsPage = () => {
     const [transaction, setTransaction] = useState<number | ''>('')
     const [amount, setAmount] = useState('')
     const [remarks, setRemarks] = useState('')
-    const [date, setDate] = useState('')
+    const [date, setDate] = useState<Date | undefined>(new Date())
     const [paymentMethod, setPaymentMethod] = useState<number | ''>('')
     const [paymentSource, setPaymentSource] = useState<number | ''>('')
     const [txRef, setTxRef] = useState('')
@@ -144,7 +147,7 @@ const RepaymentsPage = () => {
     const [editTransaction, setEditTransaction] = useState<number | ''>('')
     const [editAmount, setEditAmount] = useState('')
     const [editRemarks, setEditRemarks] = useState('')
-    const [editDate, setEditDate] = useState('')
+    const [editDate, setEditDate] = useState<Date | undefined>(undefined)
     const [editPaymentMethod, setEditPaymentMethod] = useState<number | ''>('')
     const [editPaymentSource, setEditPaymentSource] = useState<number | ''>('')
     const [editTxRef, setEditTxRef] = useState('')
@@ -154,17 +157,17 @@ const RepaymentsPage = () => {
     const [newPMCommonEdit, setNewPMCommonEdit] = useState(false)
 
     // Zero-results toast when filters applied and no results
-        const lastToastSignature = useRef<string>('')
-        useEffect(() => {
-            if (loadingRep) return
-            const activeFilter = Boolean(filters.label || typeof filters.transaction === 'number')
-            if (!activeFilter) return
-            const signature = `${filters.label || ''}|${filters.transaction || ''}`
-            if (repayments.length === 0 && lastToastSignature.current !== signature) {
-                lastToastSignature.current = signature
-                toast.info('No repayments match your filters. Adjust or clear filters to see results.')
-            }
-        }, [loadingRep, repayments.length, filters])
+    const lastToastSignature = useRef<string>('')
+    useEffect(() => {
+        if (loadingRep) return
+        const activeFilter = Boolean(filters.label || typeof filters.transaction === 'number')
+        if (!activeFilter) return
+        const signature = `${filters.label || ''}|${filters.transaction || ''}`
+        if (repayments.length === 0 && lastToastSignature.current !== signature) {
+            lastToastSignature.current = signature
+            toast.info('No repayments match your filters. Adjust or clear filters to see results.')
+        }
+    }, [loadingRep, repayments.length, filters])
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
     const onSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -180,12 +183,12 @@ const RepaymentsPage = () => {
                 transaction: Number(transaction),
                 amount: amt,
                 remarks: remarks.trim(),
-                date: date || new Date().toISOString().slice(0, 10),
+                date: toUTCISOString(date!),
                 payment_method: paymentMethod === '' ? null : Number(paymentMethod),
                 payment_source: paymentSource === '' ? null : Number(paymentSource),
                 transaction_reference: txRef.trim() || null,
             }).unwrap()
-            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(''); setPaymentMethod(''); setPaymentSource(''); setTxRef('')
+            setLabel(''); setTransaction(''); setAmount(''); setRemarks(''); setDate(new Date()); setPaymentMethod(''); setPaymentSource(''); setTxRef('')
             toast.success(extractSuccessMessage(res, 'Repayment created'))
             setRefresh((c) => c + 1)
             return true
@@ -326,7 +329,7 @@ const RepaymentsPage = () => {
                                         <TableCell className="text-right pr-3">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button size="sm" variant="outline" onClick={() => setViewingId(r.id)}>View</Button>
-                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date); setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); setEditPaymentSource(typeof r.payment_source === 'number' ? r.payment_source : ''); setEditTxRef(r.transaction_reference || ''); }}>Edit</Button>
+                                                <Button size="sm" variant="outline" onClick={() => { setEditingId(r.id); setEditLabel(r.label); setEditTransaction(r.transaction); setEditAmount(String(r.amount)); setEditRemarks(r.remarks || ''); setEditDate(r.date ? new Date(r.date) : undefined); setEditPaymentMethod(typeof r.payment_method === 'number' ? r.payment_method : ''); setEditPaymentSource(typeof r.payment_source === 'number' ? r.payment_source : ''); setEditTxRef(r.transaction_reference || ''); }}>Edit</Button>
                                                 <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteId(r.id)} disabled={deleting}>Delete</Button>
                                             </div>
                                         </TableCell>
@@ -382,7 +385,7 @@ const RepaymentsPage = () => {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="date">Date</Label>
-                                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                                <DateTimePicker date={date} setDate={setDate} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="payment-method">Payment method (optional)</Label>
@@ -482,7 +485,7 @@ const RepaymentsPage = () => {
                                     <div><span className="text-muted-foreground">Label:</span> {rep.label}</div>
                                     <div><span className="text-muted-foreground">Transaction:</span> {String(txLabel)}</div>
                                     <div><span className="text-muted-foreground">Amount:</span> {rep.amount}</div>
-                                    <div><span className="text-muted-foreground">Date:</span> {rep.date}</div>
+                                    <div><span className="text-muted-foreground">Date:</span> {formatDateTime(rep.date)}</div>
                                     <div><span className="text-muted-foreground">Remarks:</span> {rep.remarks || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment method:</span> {paymentMethods.find(pm => pm.id === (rep.payment_method ?? -1))?.label || '—'}</div>
                                     <div><span className="text-muted-foreground">Payment source:</span> {paymentSources.find(ps => ps.id === (rep.payment_source ?? -1))?.label || '—'}</div>
@@ -507,7 +510,7 @@ const RepaymentsPage = () => {
                             try {
                                 const id = editingId!
                                 const amt = parseFloat(editAmount)
-                                const res = await updateRep({ id, changes: { label: editLabel.trim(), transaction: editTransaction as number, amount: amt, remarks: editRemarks.trim(), date: editDate, payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
+                                const res = await updateRep({ id, changes: { label: editLabel.trim(), transaction: editTransaction as number, amount: amt, remarks: editRemarks.trim(), date: toUTCISOString(editDate!), payment_method: editPaymentMethod === '' ? null : Number(editPaymentMethod), payment_source: editPaymentSource === '' ? null : Number(editPaymentSource), transaction_reference: editTxRef.trim() || null } }).unwrap()
                                 toast.success(extractSuccessMessage(res, 'Repayment updated'))
                                 setEditingId(null)
                             } catch (e) {
@@ -547,7 +550,7 @@ const RepaymentsPage = () => {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-date">Date</Label>
-                                <Input id="edit-date" type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                                <DateTimePicker date={editDate} setDate={setEditDate} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-payment-method">Payment method (optional)</Label>

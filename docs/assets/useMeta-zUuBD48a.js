@@ -1,1 +1,0 @@
-import{r as n}from"./vendor-redux-Waidrk23.js";import{W as c}from"./index-DwFGw5Mq.js";function a(e,r){const{getTitle:o,ready:s}=c(),t=n.useMemo(()=>o(e,r),[o,e,r]);return n.useEffect(()=>{if(!t)return;const u=document.title;return document.title=t,()=>{document.title=u}},[t]),{title:t,ready:s}}export{a as u};

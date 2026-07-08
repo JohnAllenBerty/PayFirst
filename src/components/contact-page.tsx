@@ -53,7 +53,16 @@ const ContactPage = () => {
     const [importType, setImportType] = useState<'google'>('google')
     const [importContacts, { isLoading: importing }] = useImportContactsMutation()
 
-    const groups = useMemo(() => (groupsRes && typeof groupsRes !== 'string' && (groupsRes as ApiSuccess<ContactGroup[]>)?.status ? (groupsRes as ApiSuccess<ContactGroup[]>)?.data : []), [groupsRes])
+    const groups: ContactGroup[] = useMemo(() => {
+        // Defensive normalization to ensure we always work with an array
+        if (!groupsRes || typeof groupsRes === 'string') return []
+        const res = groupsRes as ApiSuccess<ContactGroup[] | { results?: ContactGroup[] }> | ApiFail
+        if (!res.status) return []
+        const data = (res as ApiSuccess<ContactGroup[] | { results?: ContactGroup[] }>).data
+        if (Array.isArray(data)) return data
+        if (data && Array.isArray((data as { results?: ContactGroup[] }).results)) return (data as { results?: ContactGroup[] }).results || []
+        return []
+    }, [groupsRes])
     const contactsData = useMemo(() => {
         const res = contactsRes as ApiFail | Paginated<Contact> | ApiSuccess<Paginated<Contact> | Contact[]> | undefined
         if (!res) return { items: [] as Contact[], total: 0 }
