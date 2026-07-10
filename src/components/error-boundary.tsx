@@ -18,7 +18,6 @@ class ErrorBoundaryClass extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   state: ErrorBoundaryState = { hasError: false, isAuthError: false };
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console
     console.error('[ErrorBoundary] Caught error', error, info);
 
     // Check if this is an authentication-related error

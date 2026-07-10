@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useMemo } from 'react'
 import { useMetaQuery, type ApiFail, type ApiSuccess, type ModuleInfo } from '@/store/api/payFirstApi'
 import { useAuthToken } from '@/hooks/useAuthToken'
@@ -79,7 +80,6 @@ export const MetaProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!Array.isArray(data)) {
                 // Non-fatal diagnostic to help trace unexpected meta shapes that could trigger forEach errors
                 if (process.env.NODE_ENV !== 'production') {
-                    // eslint-disable-next-line no-console
                     console.warn('[MetaContext] metaRes.status===true but data is not an array:', data)
                 }
             }
